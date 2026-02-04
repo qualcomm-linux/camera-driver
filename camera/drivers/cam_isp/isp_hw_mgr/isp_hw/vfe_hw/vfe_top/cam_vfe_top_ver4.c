@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -115,6 +115,7 @@ struct cam_vfe_mux_ver4_data {
 	bool                               sfe_binned_epoch_cfg;
 	bool                               enable_sof_irq_debug;
 	bool                               handle_camif_irq;
+	bool                               per_port_en;
 	uint32_t                           hw_ctxt_mask;
 	uint32_t  stored_irq_masks[VFE_TOP_VER4_MAX_STORED_MASKS][CAM_VFE_TOP_IRQ_MAX];
 };
@@ -392,7 +393,8 @@ static int cam_vfe_top_ver4_enable_irq(
 					rsrc_data->vfe_irq_controller,
 					rsrc_data->irq_err_handle,
 					irq_args->enable_irq,
-					rsrc_data->stored_irq_masks[VFE_TOP_VER4_ERR_MASK]);
+					rsrc_data->stored_irq_masks[VFE_TOP_VER4_ERR_MASK],
+					vfe_res->tasklet_info);
 
 				if (rc) {
 					CAM_ERR(CAM_ISP, "Error IRQ handle update failure");
@@ -1118,8 +1120,10 @@ int cam_vfe_top_ver4_reserve(void *device_priv,
 			vfe_priv->hw_ctxt_mask = acquire_args->hw_ctxt_mask;
 			top_priv->top_common.mux_rsrc[i].res_state =
 				CAM_ISP_RESOURCE_STATE_RESERVED;
-			if (acquire_args->in_port->per_port_en && args->per_port_acquire)
+			if (acquire_args->in_port->per_port_en && args->per_port_acquire) {
 				top_priv->top_common.mux_rsrc[i].is_per_port_acquire = true;
+				vfe_priv->per_port_en = true;
+			}
 			acquire_args->rsrc_node = &top_priv->top_common.mux_rsrc[i];
 
 			rc = 0;
@@ -1159,6 +1163,7 @@ int cam_vfe_top_ver4_release(void *device_priv,
 	memset(&vfe_priv->top_priv->sof_ts_reg_addr, 0,
 		sizeof(vfe_priv->top_priv->sof_ts_reg_addr));
 	vfe_priv->hw_ctxt_mask = 0;
+	vfe_priv->per_port_en = false;
 
 	for (i = 0; i < VFE_TOP_VER4_MAX_STORED_MASKS; i++) {
 		for (j = 0; j < CAM_VFE_TOP_IRQ_MAX; j++)
@@ -2250,7 +2255,8 @@ skip_core_cfg:
 		rsrc_data->stored_irq_masks[VFE_TOP_VER4_FRAME_IRQ_MASK][CAM_VFE_TOP_IRQ_REG0],
 		rsrc_data->stored_irq_masks[VFE_TOP_VER4_FRAME_IRQ_MASK][CAM_VFE_TOP_IRQ_REG1]);
 
-	if (vfe_res->is_per_port_start) {
+	if (vfe_res->is_per_port_start ||
+		(!vfe_res->linked && rsrc_data->per_port_en)) {
 		CAM_DBG(CAM_ISP, "Skipping irq subscribe for resources that are not updated");
 		goto skip_irq_subscribe;
 	}
@@ -2448,11 +2454,11 @@ static int cam_vfe_resource_deinit(
 	soc_info = rsrc_data->soc_info;
 
 	if ((rsrc_data->dsp_mode >= CAM_ISP_DSP_MODE_ONE_WAY) &&
-		(rsrc_data->dsp_mode <= CAM_ISP_DSP_MODE_ROUND)) {
+			(rsrc_data->dsp_mode <= CAM_ISP_DSP_MODE_ROUND)) {
 		rc = cam_vfe_soc_disable_clk(soc_info, CAM_VFE_DSP_CLK_NAME);
 		if (rc)
 			CAM_ERR(CAM_ISP, "VFE:%u failed to disable dsp clk",
-				vfe_res->hw_intf->hw_idx);
+					vfe_res->hw_intf->hw_idx);
 	}
 
 	CAM_DBG(CAM_ISP, "VFE:%u Res: %s DeInit Done",
