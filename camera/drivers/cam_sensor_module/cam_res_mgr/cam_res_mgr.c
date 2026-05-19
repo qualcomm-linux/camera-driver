@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/init.h>
@@ -454,8 +454,9 @@ int cam_res_mgr_gpio_request(struct device *dev, uint gpio,
 	 *    from the gpio_res_list
 	 * These two situations both need request gpio.
 	 */
-	if (!gpio_found) {
-		CAM_DBG(CAM_RES, "gpio: %u not found in gpio_res list", gpio);
+	if (!gpio_found && (!(cam_res_mgr_gpio_is_in_shared_pctrl_gpio(gpio)))) {
+		CAM_DBG(CAM_RES, "NonPinctrl gpio: %u not found in gpio_res list", gpio);
+
 		rc = gpio_request_one(gpio, flags, label);
 		if (rc) {
 			CAM_ERR(CAM_RES, "gpio %d:%s request fails rc = %d",
@@ -633,10 +634,10 @@ static void cam_res_mgr_gpio_free(struct device *dev, uint gpio)
 			else {
 				CAM_ERR(CAM_RES, "Invalid PinCtrl Idx: %d", pctrl_idx);
 			}
+		} else {
+			CAM_DBG(CAM_RES, "freeing gpio: %u", gpio);
+			gpio_free(gpio);
 		}
-
-		CAM_DBG(CAM_RES, "freeing gpio: %u", gpio);
-		gpio_free(gpio);
 	}
 
 	mutex_unlock(&cam_res->gpio_res_lock);
