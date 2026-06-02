@@ -223,6 +223,7 @@ struct cam_vfe_bus_ver3_vfe_out_data {
 	bool                             limiter_enabled;
 	bool                             mc_based;
 	bool                             cntxt_cfg_except;
+	bool                             per_port_en;
 	uint32_t                         dst_hw_ctxt_id_mask;
 	uint64_t                         pid_mask;
 	uint32_t   stored_irq_masks[CAM_VFE_BUS_VER3_MAX_STORED_MASKS][CAM_VFE_BUS_VER3_IRQ_MAX];
@@ -2187,6 +2188,8 @@ static int cam_vfe_bus_ver3_update_acquire_vfe_out(void *bus_priv, void *acquire
 
 	rsrc_data->is_dual = out_acquire_args->is_dual;
 	rsrc_data->is_master = out_acquire_args->is_master;
+	rsrc_data->per_port_en = is_per_port_acquire;
+
 	if (!update_only)
 		rsrc_node->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 	rsrc_node->is_per_port_acquire = is_per_port_acquire;
@@ -2236,6 +2239,7 @@ static int cam_vfe_bus_ver3_release_vfe_out(void *bus_priv, void *release_args,
 			vfe_out->res_id);
 	}
 
+	rsrc_data->per_port_en = false;
 	num_wm = cam_vfe_bus_ver3_get_num_wm(rsrc_data);
 	for (i = 0; i < num_wm; i++)
 		cam_vfe_bus_ver3_release_wm(bus_priv, &rsrc_data->wm_res[i]);
@@ -2339,7 +2343,8 @@ static int cam_vfe_bus_ver3_start_vfe_out(
 		rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK][CAM_VFE_BUS_VER3_IRQ_REG0],
 		rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK][CAM_VFE_BUS_VER3_IRQ_REG1]);
 
-	if (vfe_out->is_per_port_start) {
+	if (vfe_out->is_per_port_start ||
+		(!vfe_out->linked && rsrc_data->per_port_en)) {
 		CAM_DBG(CAM_ISP, "Skipping irq subscribe for resources that are not updated");
 		goto end;
 	}
@@ -4772,9 +4777,43 @@ static int cam_vfe_bus_ver3_update_res_vfe_out(void *bus_priv, void *acquire_arg
 	return rc;
 }
 
+static int cam_vfe_bus_ver3_update_res_comp_grp_state(
+	struct cam_vfe_bus_ver3_priv         *ver3_bus_priv,
+	struct cam_isp_resource_node           *wm_res,
+	bool enable)
+{
+	struct cam_vfe_bus_ver3_wm_resource_data  *rsrc_data = NULL;
+	struct cam_isp_resource_node              *comp_grp_local = NULL;
+	enum cam_vfe_bus_ver3_comp_grp_type       comp_grp_id;
+	bool previously_acquired = false;
+
+	if (!ver3_bus_priv || !wm_res) {
+		CAM_ERR(CAM_ISP, "Invalid params");
+		return -EINVAL;
+	}
+
+	rsrc_data = wm_res->res_priv;
+	comp_grp_id = rsrc_data->hw_regs->comp_group;
+
+	previously_acquired = cam_vfe_bus_ver3_match_comp_grp(
+		ver3_bus_priv, &comp_grp_local, comp_grp_id);
+
+	if (!comp_grp_local || !previously_acquired) {
+		CAM_ERR(CAM_ISP, "Invalid comp_grp:%d", comp_grp_id);
+		return -ENODEV;
+	}
+
+	if (enable)
+		comp_grp_local->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
+	else
+		comp_grp_local->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
+
+	return 0;
+}
+
 static int cam_vfe_bus_ver3_enable_irq_vfe_out(void *bus_priv, void *res_irq_mask)
 {
-	int   i, rc = 0;
+	int   i, j, rc = 0, num_wm = 0;
 	struct cam_vfe_bus_ver3_vfe_out_data  *rsrc_data = NULL;
 	struct cam_vfe_bus_ver3_common_data   *common_data = NULL;
 	uint32_t source_group = 0;
@@ -4850,6 +4889,9 @@ static int cam_vfe_bus_ver3_enable_irq_vfe_out(void *bus_priv, void *res_irq_mas
 						CAM_IRQ_EVT_GROUP_1);
 
 				if (common_data->rup_irq_handle[source_group] < 1) {
+					cam_irq_controller_unsubscribe_irq(
+						common_data->buf_done_controller,
+						vfe_out->irq_handle);
 					CAM_ERR(CAM_ISP, "VFE:%u Failed to subscribe RUP IRQ",
 						rsrc_data->common_data->core_index);
 						common_data->rup_irq_handle[source_group] = 0;
@@ -4857,11 +4899,23 @@ static int cam_vfe_bus_ver3_enable_irq_vfe_out(void *bus_priv, void *res_irq_mas
 				}
 			}
 		} else if (vfe_out->irq_handle) {
+			num_wm = cam_vfe_bus_ver3_get_num_wm(rsrc_data);
+			for (j = 0; j < num_wm; j++) {
+				cam_vfe_bus_ver3_update_res_comp_grp_state(bus_priv,
+					&rsrc_data->wm_res[j], irq_args->enable_irq);
+			}
+
+			if (!irq_args->enable_irq)
+				vfe_out->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
+			else
+				vfe_out->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
+
 			rc = cam_irq_controller_update_irq(
 				common_data->buf_done_controller,
 				vfe_out->irq_handle,
 				irq_args->enable_irq,
-				rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK]);
+				rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_BUF_DONE_MASK],
+				vfe_out->tasklet_info);
 
 			if (rc) {
 				CAM_ERR(CAM_ISP, "Update IRQ failed for VFE out_res %d",
@@ -4869,8 +4923,12 @@ static int cam_vfe_bus_ver3_enable_irq_vfe_out(void *bus_priv, void *res_irq_mas
 				return -EFAULT;
 			}
 
-			if ((common_data->is_lite || source_group > CAM_VFE_BUS_VER3_SRC_GRP_0))
-				goto end;
+			if ((common_data->is_lite || source_group > CAM_VFE_BUS_VER3_SRC_GRP_0)) {
+				if (i == (irq_args->num_res - 1))
+					goto end;
+				else
+					continue;
+			}
 
 			if ((common_data->supported_irq & CAM_VFE_HW_IRQ_CAP_RUP)) {
 				rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_RUP_MASK]
@@ -4879,7 +4937,8 @@ static int cam_vfe_bus_ver3_enable_irq_vfe_out(void *bus_priv, void *res_irq_mas
 						common_data->bus_irq_controller,
 						common_data->rup_irq_handle[source_group],
 						irq_args->enable_irq,
-						rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_RUP_MASK]);
+						rsrc_data->stored_irq_masks[CAM_VFE_BUS_VER3_RUP_MASK],
+						vfe_out->tasklet_info);
 				if (rc) {
 					CAM_ERR(CAM_ISP, "Update IRQ failed for VFE out_res %d",
 						vfe_out->res_id);

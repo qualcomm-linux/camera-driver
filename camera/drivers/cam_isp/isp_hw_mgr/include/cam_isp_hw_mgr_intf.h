@@ -534,6 +534,7 @@ struct cam_isp_hw_cmd_args {
 		struct {
 			uint64_t                 type;
 			bool                     bubble_recover_dis;
+			bool                     is_per_port_en;
 		} ctx_info;
 		struct {
 			uint32_t                     packet_op_code;

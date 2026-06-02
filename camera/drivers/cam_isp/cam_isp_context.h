@@ -432,6 +432,7 @@ struct cam_isp_fcg_prediction_tracker {
  * @bubble_recover_dis:        Bubble recovery disabled
  * @sfe_en:                    Indicates if SFE is being used
  * @isp_external_recovery:     Indicates if external recovery enabled
+ * @per_port_en:               Indicates if per port feature is enabled or not
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -502,6 +503,7 @@ struct cam_isp_context {
 	bool                                  bubble_recover_dis;
 	bool                                  sfe_en;
 	bool                                  isp_external_recovery;
+	bool                                  per_port_en;
 };
 
 /**

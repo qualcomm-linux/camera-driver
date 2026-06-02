@@ -2357,7 +2357,7 @@ int cam_ife_hw_mgr_acquire_res_ife_out_rdi(
 	ife_out_res->res_id = vfe_out_res_id;
 	ife_out_res->res_type = CAM_ISP_RESOURCE_VFE_OUT;
 	if (per_port_acquire) {
-		ife_out_res->linked = false;
+		ife_out_res->hw_res[0]->linked = false;
 	} else {
 		c_ctx->vfe_out_map[res_id] = c_ctx->num_acq_vfe_out;
 		ife_src_res->num_children++;
@@ -3880,9 +3880,9 @@ skip_get_ife_src_res:
 			ife_src_res->hw_res[i] = vfe_acquire.vfe_in.rsrc_node;
 			ife_src_res->hw_ctxt_id_mask |= vfe_acquire.vfe_in.hw_ctxt_mask;
 
-			if (per_port_acquire)
-				ife_src_res->linked = false;
-			else {
+			if (per_port_acquire) {
+				ife_src_res->hw_res[i]->linked = false;
+			} else {
 				*acquired_hw_id |=
 					cam_convert_hw_idx_to_ife_hw_num(
 					hw_intf->hw_idx);
@@ -3922,7 +3922,7 @@ skip_get_ife_src_res:
 					goto err;
 				}
 				ife_src_res->hw_res[0] = vfe_acquire.vfe_in.rsrc_node;
-				ife_src_res->linked = false;
+				ife_src_res->hw_res[0]->linked = false;
 
 			CAM_DBG(CAM_ISP,
 				"acquire success IFE:%d ctx_idx: %u res type :0x%x res: %s res id:0x%x",
@@ -4262,7 +4262,7 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 			goto end;
 		}
 		if (per_port_acquire)
-			csid_res->linked = false;
+			csid_res->hw_res[i]->linked = false;
 
 		csid_res->hw_res[i] = csid_acquire.node_res;
 		hw_intf = csid_res->hw_res[i]->hw_intf;
@@ -4506,7 +4506,7 @@ static int cam_ife_hw_mgr_acquire_csid_rdi_util(
 	csid_res->hw_res[1] = NULL;
 	csid_res->use_wm_pack = csid_acquire.use_wm_pack;
 	if (per_port_acquire)
-		csid_res->linked = false;
+		csid_res->hw_res[0]->linked = false;
 	if (c_ctx->left_hw_idx == CAM_IFE_CSID_HW_NUM_MAX)
 		c_ctx->left_hw_idx = csid_res->hw_res[0]->hw_intf->hw_idx;
 
@@ -15356,6 +15356,7 @@ static int cam_ife_mgr_int_cmd(void                        *hw_mgr_priv,
 			isp_hw_cmd_args->u.ctx_info.bubble_recover_dis  = 1;
 		else
 			isp_hw_cmd_args->u.ctx_info.bubble_recover_dis = 0;
+		isp_hw_cmd_args->u.ctx_info.is_per_port_en =  c_ctx->flags.per_port_en;
 		break;
 	case CAM_ISP_HW_MGR_GET_PACKET_OPCODE:
 		packet = (struct cam_packet *)

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_ISP_HW_H_
@@ -303,6 +303,7 @@ enum cam_isp_hw_cmd_type {
  * @is_per_port_start:            Indicates start_hw is called on real streamon call or
  *                                on per port streamon call
  * @is_per_port_acquire:          Indicates if resource is yet to be really acquired
+ * @linked:                       Indicates if this hw res to linked to any ife contexts
  */
 struct cam_isp_resource_node {
 	enum cam_isp_resource_type     res_type;
@@ -329,6 +330,8 @@ struct cam_isp_resource_node {
 	bool                           is_rdi_primary_res;
 	bool                           is_per_port_start;
 	bool                           is_per_port_acquire;
+	bool                           is_per_port_intermediate_stop;
+	bool                           linked;
 };
 
 /*
