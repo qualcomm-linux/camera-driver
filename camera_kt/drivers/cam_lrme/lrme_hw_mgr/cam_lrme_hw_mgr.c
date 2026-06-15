@@ -334,7 +334,7 @@ static int cam_lrme_mgr_util_prepare_hw_update_entries(
 		if (!cmd_desc[i].length)
 			continue;
 
-		if ((num_entry + 1) >= prepare->max_hw_update_entries) {
+		if ((num_entry + 1) >= CAM_LRME_MAX_HW_ENTRIES) {
 			CAM_ERR(CAM_LRME, "Exceed max num of entry");
 			return -EINVAL;
 		}
