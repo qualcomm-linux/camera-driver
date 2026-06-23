@@ -886,17 +886,17 @@ static int cam_ife_csid_ver2_stop_csi2_in_err(
 		csid_hw->hw_intf->hw_idx);
 
 	if (csid_hw->rx_cfg.top_irq_handle)
-		cam_irq_controller_disable_irq(
+		cam_irq_controller_disable_irq_nolock(
 			csid_hw->top_irq_controller[CAM_IFE_CSID_TOP_IRQ_STATUS_REG0],
 			csid_hw->rx_cfg.top_irq_handle);
 
 	if (csid_hw->rx_cfg.irq_handle)
-		cam_irq_controller_disable_irq(
+		cam_irq_controller_disable_irq_nolock(
 			csid_hw->rx_irq_controller[CAM_IFE_CSID_RX_IRQ_STATUS_REG0],
 			csid_hw->rx_cfg.irq_handle);
 
 	if (csid_hw->rx_cfg.err_irq_handle[CAM_IFE_CSID_RX_IRQ_STATUS_REG0])
-		cam_irq_controller_disable_irq(
+		cam_irq_controller_disable_irq_nolock(
 			csid_hw->rx_irq_controller[CAM_IFE_CSID_RX_IRQ_STATUS_REG0],
 			csid_hw->rx_cfg.err_irq_handle[CAM_IFE_CSID_RX_IRQ_STATUS_REG0]);
 

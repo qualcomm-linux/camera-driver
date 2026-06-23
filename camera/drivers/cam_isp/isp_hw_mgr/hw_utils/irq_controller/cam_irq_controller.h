@@ -279,6 +279,25 @@ irqreturn_t cam_irq_controller_handle_irq(int irq_num, void *priv, int evt_grp);
 int cam_irq_controller_disable_irq(void *irq_controller, uint32_t handle);
 
 /*
+ * cam_irq_controller_disable_irq_nolock()
+ *
+ * @brief:              Without taking controller locks
+ *                      Disable the interrupts on given controller.
+ *                      Unsubscribe will disable the IRQ by default, so this is
+ *                      only needed if between subscribe/unsubscribe there is
+ *                      need to disable IRQ again
+ *
+ * @irq_controller:     Pointer to IRQ Controller that controls the registered
+ *                      events to it.
+ * @handle:             Handle returned on successful subscribe, used to
+ *                      identify the handler object
+ *
+ * @return:             0: events found and disabled
+ *                      Negative: events not registered on this controller
+ */
+int cam_irq_controller_disable_irq_nolock(void *irq_controller, uint32_t handle);
+
+/*
  * cam_irq_controller_enable_irq()
  *
  * @brief:              Enable the interrupts on given controller.

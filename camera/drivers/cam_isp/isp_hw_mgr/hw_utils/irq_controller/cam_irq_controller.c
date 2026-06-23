@@ -705,6 +705,29 @@ end:
 	return rc;
 }
 
+int cam_irq_controller_disable_irq_nolock(void *irq_controller, uint32_t handle)
+{
+	struct cam_irq_controller   *controller  = irq_controller;
+	struct cam_irq_evt_handler  *evt_handler = NULL;
+	int                         rc = 0;
+
+	if (!controller)
+		return rc;
+
+	rc = cam_irq_controller_find_event_handle(controller, handle,
+		&evt_handler);
+	if (rc)
+		goto end;
+
+	CAM_DBG(CAM_IRQ_CTRL, "disable event %d", handle);
+	__cam_irq_controller_disable_irq(controller, evt_handler);
+	cam_irq_controller_clear_irq(controller, evt_handler);
+
+end:
+	return rc;
+}
+
+
 int cam_irq_controller_unsubscribe_irq(void *irq_controller,
 	uint32_t handle)
 {
