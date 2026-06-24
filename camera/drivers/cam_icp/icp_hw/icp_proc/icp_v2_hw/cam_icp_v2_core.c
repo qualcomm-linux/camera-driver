@@ -40,6 +40,9 @@ typedef int (*qcom_mdt_pas_load_t)(
 		const char *firmware,
 		phys_addr_t *reloc_base);
 
+typedef void (*qcom_scm_pas_metadata_release_t)(
+		struct cam_qcom_scm_pas_context *ctx);
+
 typedef int (*qcom_scm_pas_prepare_and_auth_reset_t)(
 		struct cam_qcom_scm_pas_context *ctx);
 
@@ -620,6 +623,7 @@ static int __load_firmware(struct platform_device *pdev,
 	ssize_t fw_size;
 	devm_qcom_scm_pas_context_alloc_t fn_devm_qcom_scm_pas_context_alloc = NULL;
 	qcom_mdt_pas_load_t fn_qcom_mdt_pas_load = NULL;
+	qcom_scm_pas_metadata_release_t fn_qcom_scm_pas_metadata_release = NULL;
 	int rc;
 
 	if (!pdev) {
@@ -718,6 +722,17 @@ static int __load_firmware(struct platform_device *pdev,
 
 	CAM_DBG(CAM_ICP, "res_start=0x%x, res_size=%zu", res_start, res_size);
 out:
+	if (fw->ctx) {
+		fn_qcom_scm_pas_metadata_release =
+				(qcom_scm_pas_metadata_release_t)
+				__symbol_get("qcom_scm_pas_metadata_release");
+		if (!fn_qcom_scm_pas_metadata_release)
+			CAM_ERR(CAM_ICP, "qcom_scm_pas_metadata_release symbol not available");
+		else {
+			fn_qcom_scm_pas_metadata_release(fw->ctx);
+			symbol_put_addr(fn_qcom_scm_pas_metadata_release);
+		}
+	}
 	if (fn_devm_qcom_scm_pas_context_alloc)
 		symbol_put_addr(fn_devm_qcom_scm_pas_context_alloc);
 	if (fn_qcom_mdt_pas_load)
