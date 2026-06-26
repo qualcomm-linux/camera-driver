@@ -170,6 +170,7 @@ static uint32_t *cam_ope_bus_rd_update(struct ope_hw *ope_hw_info,
 	struct ope_bus_rd_io_port_info *io_port_info;
 	size_t avaliable_size;
 	uint32_t size;
+	uint32_t write_len;
 
 	if (ctx_id < 0 || !prepare) {
 		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, prepare);
@@ -313,6 +314,13 @@ static uint32_t *cam_ope_bus_rd_update(struct ope_hw *ope_hw_info,
 			if ((size * 4) > avaliable_size) {
 				CAM_ERR(CAM_OPE, "buf size:%d is not sufficient, expected: %d",
 					avaliable_size, size * 4);
+				return NULL;
+			}
+
+			write_len = (count + header_size) * sizeof(uint32_t);
+			if (cam_ope_validate_kmd_space(ope_request->ope_kmd_buf.size,
+						prepare->kmd_buf_offset, write_len)){
+				CAM_ERR(CAM_OPE, "KMD buffer validation failed");
 				return NULL;
 			}
 
@@ -462,6 +470,7 @@ static int cam_ope_bus_rd_prepare(struct ope_hw *ope_hw_info,
 	int32_t num_stripes = 0;
 	size_t avaliable_size;
 	uint32_t size;
+	uint32_t write_len;
 
 	if (ctx_id < 0 || !data) {
 		CAM_ERR(CAM_OPE, "Invalid data: %d %x", ctx_id, data);
@@ -571,6 +580,13 @@ static int cam_ope_bus_rd_prepare(struct ope_hw *ope_hw_info,
 		return NULL;
 	}
 
+	write_len = (count + header_size) * sizeof(uint32_t);
+	rc = cam_ope_validate_kmd_space(ope_request->ope_kmd_buf.size,
+			prepare->kmd_buf_offset, write_len);
+	if (rc) {
+		CAM_ERR(CAM_OPE, "KMD buffer validation failed for go command: %d", rc);
+		goto end;
+	}
 	kmd_buf = cdm_ops->cdm_write_regrandom(
 		kmd_buf, count/2, temp_reg);
 	prepare->kmd_buf_offset +=
