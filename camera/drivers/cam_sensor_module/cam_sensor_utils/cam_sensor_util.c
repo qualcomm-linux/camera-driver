@@ -2432,16 +2432,25 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 						soc_info->rgltr[j];
 				}
 			}
+
 			if (power_setting->config_val)
 				soc_info->clk_rate[0][power_setting->seq_val] =
 					power_setting->config_val;
 
+			rc = cam_soc_util_power_domain_enable_default(soc_info);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR_UTIL,
+						"Power domain enable failed with rc = %d", rc);
+				goto power_up_failed;
+			}
+
 			for (j = 0; j < soc_info->num_clk; j++) {
 				rc = cam_soc_util_clk_enable(soc_info, CAM_CLK_SW_CLIENT_IDX,
-					false, j, 0);
+						false, j, 0);
 				if (rc) {
 					CAM_ERR(CAM_UTIL,
 						"Failed in clk enable %d", i);
+					cam_soc_util_power_domain_disable_default(soc_info);
 					break;
 				}
 			}
@@ -2755,6 +2764,7 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 					"config clk reg failed rc: %d", ret);
 				continue;
 			}
+			cam_soc_util_power_domain_disable_default(soc_info);
 			break;
 		case SENSOR_RESET:
 		case SENSOR_STANDBY:

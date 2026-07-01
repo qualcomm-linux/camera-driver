@@ -363,7 +363,7 @@ static int cam_ife_csid_ver2_sof_irq_debug(
 		cam_irq_controller_update_irq(
 			csid_hw->path_irq_controller[res->res_id],
 			path_cfg->irq_handle,
-			sof_irq_enable, &irq_mask);
+			sof_irq_enable, &irq_mask, res->tasklet_info);
 	}
 
 	if (sof_irq_enable) {
@@ -3564,6 +3564,7 @@ static int cam_ife_csid_ver2_reserve(void *hw_priv,
 	reserve->node_res = res;
 	res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
 	res->is_per_port_acquire = is_per_port_acquire;
+	res->is_per_port_intermediate_stop = false;
 	csid_hw->event_cb = reserve->event_cb;
 	csid_hw->tasklet  = reserve->tasklet;
 	res->tasklet_info  = reserve->tasklet;
@@ -3574,6 +3575,11 @@ static int cam_ife_csid_ver2_reserve(void *hw_priv,
 	path_cfg->handle_camif_irq = reserve->handle_camif_irq;
 	csid_hw->flags.offline_mode = reserve->is_offline;
 	reserve->need_top_cfg = csid_reg->need_top_cfg;
+
+	if (is_per_port_acquire)
+		csid_hw->flags.per_port_en = true;
+	else
+		csid_hw->flags.per_port_en = false;
 
 	CAM_DBG(CAM_ISP,
 		"CSID[%u] Resource[id: %d name:%s] state %d cid %d is_per_port_acquire:%d ",
@@ -7108,6 +7114,8 @@ static int cam_ife_csid_ver2_update_path_irq(
 	const struct cam_ife_csid_ver2_path_reg_info *path_reg;
 	struct cam_ife_csid_ver2_reg_info *csid_reg = csid_hw->core_info->csid_reg;
 	uint32_t val = 0;
+	struct cam_hw_soc_info                       *soc_info;
+	void    __iomem                              *base;
 
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
 	path_reg = csid_reg->path_reg[res->res_id];
@@ -7147,7 +7155,8 @@ static int cam_ife_csid_ver2_update_path_irq(
 				csid_hw->path_irq_controller[res->res_id],
 				path_cfg->irq_handle,
 				enable,
-				&path_cfg->stored_irq_masks[CAM_IFE_CSID_TOP_MASK][path_cfg->irq_reg_idx]);
+				&path_cfg->stored_irq_masks[CAM_IFE_CSID_TOP_MASK][path_cfg->irq_reg_idx],
+				res->tasklet_info);
 
 			if (rc) {
 				CAM_ERR(CAM_ISP, "CSID[%d] Update Irq fail %d",
@@ -7162,27 +7171,52 @@ static int cam_ife_csid_ver2_update_path_irq(
 			goto end;
 		}
 
-		if (path_cfg->discard_init_frames) {
-			if (path_cfg->discard_irq_handle) {
-				rc = cam_irq_controller_update_irq(
-					csid_hw->path_irq_controller[res->res_id],
-					path_cfg->discard_irq_handle,
-					enable,
-					path_cfg->stored_irq_masks[CAM_IFE_CSID_SOF_DISCARD_MASK]);
+		if (path_cfg->discard_irq_handle) {
+			rc = cam_irq_controller_update_irq(
+				csid_hw->path_irq_controller[res->res_id],
+				path_cfg->discard_irq_handle,
+				enable,
+				path_cfg->stored_irq_masks[CAM_IFE_CSID_SOF_DISCARD_MASK],
+				res->tasklet_info);
 
-				if (rc) {
-					CAM_ERR(CAM_ISP,
-						"CSID[%d] Updating SOF for discarding %d failed",
-						csid_hw->hw_intf->hw_idx, res->res_id);
-					rc = -EINVAL;
-					goto end;
-				}
-			} else {
+			if (rc) {
 				CAM_ERR(CAM_ISP,
-					"CSID[%d] Sof discard Irq handle not found for res:%d",
+					"CSID[%d] Updating SOF for discarding %d failed",
 					csid_hw->hw_intf->hw_idx, res->res_id);
 				rc = -EINVAL;
 				goto end;
+			}
+		} else {
+			/** Ideally UMD sends the discard_init_frame data,
+			 *  The below case is to handle in case if they do not send.
+			 *  KMD needs to be independent of UMD.
+			 */
+			if (enable && res->is_per_port_intermediate_stop) {
+				path_cfg->discard_init_frames = true;
+				path_cfg->sof_cnt = 0;
+				path_cfg->num_frames_discard = 2;
+				atomic_inc(&csid_hw->discard_frame_per_path);
+				CAM_DBG(CAM_ISP, "CSID[%u] discardframes %u path %s ref_cnt %u",
+						csid_hw->hw_intf->hw_idx,
+						path_cfg->num_frames_discard,
+						res->res_name,
+						atomic_read(&csid_hw->discard_frame_per_path));
+
+				rc = cam_ife_csid_ver2_subscribe_sof_for_discard(
+						path_cfg, csid_hw, res,
+						cam_ife_csid_ver2_discard_sof_top_half,
+						cam_ife_csid_ver2_discard_sof_rdi_bottom_half);
+				if (rc) {
+					atomic_dec(&csid_hw->discard_frame_per_path);
+					path_cfg->discard_init_frames = false;
+					path_cfg->sof_cnt = 0;
+					path_cfg->num_frames_discard = 0;
+					CAM_ERR(CAM_ISP,
+							"CSID[%d] SOF discard Irq handle not found res:%d",
+							csid_hw->hw_intf->hw_idx, res->res_id);
+					rc = -EINVAL;
+					goto end;
+				}
 			}
 		}
 
@@ -7190,23 +7224,36 @@ static int cam_ife_csid_ver2_update_path_irq(
 			rc = cam_irq_controller_update_irq(
 				csid_hw->path_irq_controller[res->res_id],
 				path_cfg->err_irq_handle,
-					enable,
-				&path_cfg->stored_irq_masks[CAM_IFE_CSID_ERR_MASK][path_cfg->irq_reg_idx]);
+				enable,
+				&path_cfg->stored_irq_masks[CAM_IFE_CSID_ERR_MASK][path_cfg->irq_reg_idx],
+				res->tasklet_info);
 
 			if (rc) {
 				CAM_ERR(CAM_ISP, "CSID[%d] Update Err Irq fail %d",
 						csid_hw->hw_intf->hw_idx, res->res_id);
-					rc = -EINVAL;
-					goto end;
+				rc = -EINVAL;
+				goto end;
 			}
 		} else {
 			CAM_ERR(CAM_ISP, "CSID[%d] err irq handle not found for res:%d",
 					csid_hw->hw_intf->hw_idx, res->res_id);
 				rc = -EINVAL;
 				goto end;
-			}
+		}
 	}
 
+	if (!enable) {
+		soc_info = &csid_hw->hw_info->soc_info;
+		base  = soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
+		cam_io_w_mb(0x0, base + path_reg->ctrl_addr);
+		res->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
+		res->is_per_port_acquire = true;
+		res->is_per_port_intermediate_stop = true;
+		CAM_INFO(CAM_ISP, "CSID:%u %s Enter res_state:%d",
+				csid_hw->hw_intf->hw_idx,
+				res->res_name,
+				res->res_state);
+	}
 end:
 	return rc;
 }

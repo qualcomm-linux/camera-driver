@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_IFE_CSID_COMMON_H_
@@ -367,6 +367,7 @@ struct cam_ife_csid_hw_flags {
 	bool                  sfe_en;
 	bool                  pf_err_detected;
 	bool                  domain_id_security;
+	bool                  per_port_en;
 };
 
 /*

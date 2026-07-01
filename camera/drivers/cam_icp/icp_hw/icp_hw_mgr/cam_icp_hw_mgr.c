@@ -3137,6 +3137,10 @@ static int32_t cam_icp_mgr_process_msg(void *priv, void *data)
 	cam_icp_mgr_process_dbg_buf(hw_mgr);
 
 	if (task_data->recover) {
+		if (!hw_mgr->icp_booted) {
+			CAM_WARN(CAM_ICP, "ICP not booted yet, skip recovery");
+			return 0;
+		}
 		CAM_ERR_RATE_LIMIT(CAM_ICP, "issuing device recovery...");
 
 		rc = cam_icp_mgr_trigger_recovery(hw_mgr);

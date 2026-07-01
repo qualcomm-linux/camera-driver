@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef _CAM_REQ_MGR_CORE_H_
 #define _CAM_REQ_MGR_CORE_H_
@@ -42,7 +42,8 @@
 
 #define VERSION_1  1
 #define VERSION_2  2
-#define CAM_REQ_MGR_MAX_TRIGGERS   2
+#define CAM_REQ_MGR_MIN_TRIGGERS   1
+#define CAM_REQ_MGR_MAX_TRIGGERS   3
 
 /**
  * enum crm_req_eof_trigger_type
@@ -378,8 +379,9 @@ struct cam_req_mgr_connected_device {
  *                         as part of shutdown.
  * @sof_timestamp_value  : SOF timestamp value
  * @prev_sof_timestamp   : Previous SOF timestamp value
- * @dual_trigger         : Links needs to wait for two triggers prior to
- *                         applying the settings
+ * @num_trigger_devices  : Number of trigger-generating devices on this link.
+ *                         CRM waits for all trigger devices prior to applying
+ *                         the settings when this value is greater than 1.
  * @trigger_cnt          : trigger count value per device initiating the trigger
  * @eof_event_cnt        : Atomic variable to track the number of EOF requests
  * @skip_init_frame      : skip initial frames crm_wd_timer validation in the
@@ -416,7 +418,7 @@ struct cam_req_mgr_core_link {
 	bool                                 is_shutdown;
 	uint64_t                             sof_timestamp;
 	uint64_t                             prev_sof_timestamp;
-	bool                                 dual_trigger;
+	uint32_t                             num_trigger_devices;
 	uint32_t trigger_cnt[CAM_REQ_MGR_MAX_TRIGGERS]
 				[CAM_TRIGGER_MAX_POINTS + 1];
 	atomic_t                             eof_event_cnt;

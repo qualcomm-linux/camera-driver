@@ -36,6 +36,7 @@ ccflags-y += \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_ir_led \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_flash \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_cci \
+	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_cci/include \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_dp_bdg \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_actuator \
 	-I$(CAMERA_KERNEL_ROOT)/camera_kt/drivers/cam_sensor_module/cam_sensor_utils \
@@ -113,6 +114,7 @@ ccflags-y += \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_eeprom \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_sensor_io \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_cci \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_cci/include \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_smmu \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sync \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_fd \
