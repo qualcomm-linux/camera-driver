@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_VFE_CORE_H_
@@ -26,7 +27,6 @@
 #define CAM_VFE_HW_IRQ_CAP_LITE_EXT_CSID   0x21
 
 struct cam_vfe_irq_hw_info {
-	int                                   reset_irq_handle;
 	uint32_t                              reset_mask;
 	struct cam_irq_controller_reg_info   *top_irq_reg;
 	uint32_t                              supported_irq;
