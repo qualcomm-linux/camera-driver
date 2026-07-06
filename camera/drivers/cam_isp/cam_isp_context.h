@@ -429,9 +429,11 @@ struct cam_isp_fcg_prediction_tracker {
  * @is_shdr_master:            Flag to indicate master context in shdr usecase
  * @last_num_exp:              Last num of exposure
  * @flush_in_progress          indicates whether flush is in progress
+ * @buf_done_wait:             Wait queue for buf done completion
  * @bubble_recover_dis:        Bubble recovery disabled
  * @sfe_en:                    Indicates if SFE is being used
  * @isp_external_recovery:     Indicates if external recovery enabled
+ * @per_port_en:               Indicates if per port feature is enabled or not
  */
 struct cam_isp_context {
 	struct cam_context              *base;
@@ -499,9 +501,11 @@ struct cam_isp_context {
 	uint32_t                              last_num_exp;
 	atomic_t                              flush_in_progress;
 	struct mutex                          isp_mutex;
+	wait_queue_head_t                     buf_done_wait;
 	bool                                  bubble_recover_dis;
 	bool                                  sfe_en;
 	bool                                  isp_external_recovery;
+	bool                                  per_port_en;
 };
 
 /**
