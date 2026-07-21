@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iopoll.h>
@@ -24,6 +24,7 @@
 #include "cam_tfe_csid_hw_intf.h"
 #include <common/cam_dt_bindings.h>
 #include "cam_cpas_hw_intf.h"
+#include "cam_tfe_csid_dev.h"
 
 /* Timeout value in msec */
 #define TFE_CSID_TIMEOUT                               1000
@@ -2196,12 +2197,13 @@ static int cam_tfe_csid_enable_rdi_path(
 				  csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
 	} else {
 		path_active = cam_tfe_csid_check_path_active(csid_hw);
-		if (path_active)
+		if (path_active) {
 			cam_io_w_mb(CAM_TFE_CSID_RESUME_AT_FRAME_BOUNDARY,
 					  soc_info->reg_map[0].mem_base +
 					  csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
+		}
 
-			CAM_DBG(CAM_ISP,
+		CAM_DBG(CAM_ISP,
 				"CSID:%d  %s RDI:%d path frame drop %d",
 				csid_hw->hw_intf->hw_idx,
 				path_active ? "Starting" : "Not Starting", id,
@@ -3014,7 +3016,7 @@ end:
 	return rc;
 }
 
-int cam_tfe_csid_halt(struct cam_tfe_csid_hw *csid_hw,
+static int cam_tfe_csid_halt(struct cam_tfe_csid_hw *csid_hw,
 	void *halt_args)
 {
 	struct cam_isp_resource_node         *res;
@@ -4348,7 +4350,7 @@ handle_fatal_error:
 
 		if (irq_status[i] & TFE_CSID_PATH_INFO_INPUT_SOF) {
 			CAM_DBG(CAM_ISP, "CSID:%d RDI:%d SOF received",
-				csid_hw->hw_intf->hw_idx);
+				csid_hw->hw_intf->hw_idx, i);
 			cam_tfe_csid_enable_path_for_init_frame_drop(csid_hw, i);
 		}
 

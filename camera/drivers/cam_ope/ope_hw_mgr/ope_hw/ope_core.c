@@ -893,7 +893,7 @@ static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 
 		if (frm_proc->cmd_buf[i][k].type == OPE_CMD_BUF_TYPE_DIRECT) {
 			size =
-				cdm_ops->cdm_required_size_indirect(frm_proc->cmd_buf[i][k].length);
+				cdm_ops->cdm_required_size_indirect();
 			kmd_buf = cdm_ops->cdm_write_indirect(
 				kmd_buf,
 				iova_addr,
@@ -922,7 +922,7 @@ static uint32_t *ope_create_stripe_cmd(struct cam_ope_hw_mgr *hw_mgr,
 					return NULL;
 				}
 
-				size = cdm_ops->cdm_required_size_dmi(dmi_cmd->length);
+				size = cdm_ops->cdm_required_size_dmi();
 				kmd_buf = cdm_ops->cdm_write_dmi(kmd_buf,
 					0, dmi_cmd->DMIAddr, dmi_cmd->DMISel,
 					dmi_cmd->addr, dmi_cmd->length);

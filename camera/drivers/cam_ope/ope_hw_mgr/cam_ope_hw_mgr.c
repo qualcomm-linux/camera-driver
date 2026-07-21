@@ -479,6 +479,7 @@ end:
 static int cam_ope_mgr_put_cmd_buf(struct cam_packet *packet)
 {
 	int i = 0;
+	int rc = 0;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 
 	cmd_desc = (struct cam_cmd_buf_desc *)
@@ -707,7 +708,7 @@ static void cam_ope_dump_req_data(struct cam_ope_request *ope_req)
 {
 	struct cam_ope_hang_dump *dump;
 	struct cam_packet *packet =
-		(struct cam_packet *)ope_req->hang_data.packet;
+		(struct cam_packet *)ope_req->hang_data.packet_handle;
 
 	if (!ope_req->ope_debug_buf.cpu_addr ||
 		ope_req->ope_debug_buf.len < sizeof(struct cam_ope_hang_dump) ||
@@ -1832,7 +1833,7 @@ end:
 	mutex_unlock(&ctx->ctx_mutex);
 }
 
-int32_t cam_ope_hw_mgr_cb(uint32_t irq_status, void *data)
+static int32_t cam_ope_hw_mgr_cb(uint32_t irq_status, void *data)
 {
 	int32_t rc = 0;
 	unsigned long flags;
@@ -3499,7 +3500,7 @@ static int cam_ope_mgr_prepare_hw_update(void *hw_priv,
 	}
 
 	ope_req->cdm_cmd->genirq_buff             = &ope_req->genirq_buff_info;
-	ope_req->hang_data.packet                 = packet;
+	ope_req->hang_data.packet_handle          = (uintptr_t)packet;
 	prepare_args->num_hw_update_entries       = 1;
 	prepare_args->hw_update_entries[0].addr   = (uintptr_t)ope_req->cdm_cmd;
 	prepare_args->priv                        = ope_req;
@@ -3705,7 +3706,7 @@ static int cam_ope_mgr_hw_open_u(void *hw_priv, void *fw_download_args)
 	return rc;
 }
 
-static cam_ope_mgr_hw_close_u(void *hw_priv, void *hw_close_args)
+static int cam_ope_mgr_hw_close_u(void *hw_priv, void *hw_close_args)
 {
 	struct cam_ope_hw_mgr *hw_mgr;
 	int rc = 0;
@@ -4321,8 +4322,10 @@ static void cam_ope_mgr_dump_pf_data(
 	pf_req_info = hw_cmd_args->u.pf_cmd_args->pf_req_info;
 	rc = cam_packet_util_get_packet_addr(&packet, pf_req_info->packet_handle,
 		pf_req_info->packet_offset);
-	if (rc)
-		return rc;
+	if (rc) {
+		CAM_ERR(CAM_OPE, "Failed to get packet addr rc=%d", rc);
+		return;
+	}
 	ope_request = pf_req_info->req;
 
 	ope_pid_mid_args.fault_mid =  pf_args->pf_smmu_info->mid;

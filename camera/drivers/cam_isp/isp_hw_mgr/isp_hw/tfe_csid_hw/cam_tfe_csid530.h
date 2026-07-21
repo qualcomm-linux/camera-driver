@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_TFE_CSID_530_H_
@@ -222,6 +222,7 @@ static struct cam_tfe_csid_common_reg_offset
 	.top_tfe2_pix_pipe_fuse_reg                   = 0xFE4,
 	.top_tfe2_fuse_reg                            = 0xFE8,
 	.format_measure_support                       = false,
+	.sync_clk                                     = true,
 };
 
 static struct cam_tfe_csid_reg_offset cam_tfe_csid_530_reg_offset = {

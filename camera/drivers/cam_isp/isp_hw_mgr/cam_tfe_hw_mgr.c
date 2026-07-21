@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -1952,7 +1952,7 @@ err:
 	return rc;
 }
 
-void cam_tfe_cam_cdm_callback(uint32_t handle, void *userdata,
+static void cam_tfe_cam_cdm_callback(uint32_t handle, void *userdata,
 	enum cam_cdm_cb_status status, void *cookie)
 {
 	struct cam_isp_prepare_hw_update_data *hw_update_data = NULL;
@@ -2261,7 +2261,7 @@ static int cam_tfe_mgr_acquire_get_unified_structure(
 	return 0;
 }
 
-int cam_tfe_hw_mgr_csiphy_clk_sync(
+static int cam_tfe_hw_mgr_csiphy_clk_sync(
 	struct cam_tfe_hw_mgr_ctx *ctx, void *cmd_args)
 {
 	int                          rc = -EINVAL;
@@ -2572,7 +2572,7 @@ err:
 	return rc;
 }
 
-int cam_tfe_mgr_acquire_get_unified_dev_str(
+static int cam_tfe_mgr_acquire_get_unified_dev_str(
 	struct cam_isp_tfe_in_port_info   *in,
 	struct cam_isp_tfe_in_port_generic_info *in_port)
 {
@@ -5243,7 +5243,7 @@ static int cam_tfe_update_dual_config(
 		CAM_ERR(CAM_ISP, "not enough buffer for all the dual configs");
 		cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 		rc = -EINVAL;
-		goto end
+		goto end;
 	}
 
 	CAM_DBG(CAM_ISP, "num_ports:%d", dual_config->num_ports);
@@ -5310,7 +5310,7 @@ put_ref:
 	return rc;
 }
 
-int cam_tfe_add_command_buffers(
+static int cam_tfe_add_command_buffers(
 	struct cam_hw_prepare_update_args  *prepare,
 	struct cam_kmd_buf_info            *kmd_buf_info,
 	struct cam_isp_ctx_base_info       *base_info,
@@ -6132,6 +6132,14 @@ static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 		case CAM_ISP_HW_MGR_GET_LAST_CONSUMED_ADDR:
 			rc = cam_tfe_mgr_cmd_get_last_consumed_addr(ctx,
 				(struct cam_isp_hw_done_event_data *)(isp_hw_cmd_args->cmd_data));
+			break;
+		case CAM_ISP_HW_MGR_GET_ACTIVE_HW_CTX_CNT:
+			/* No per-port support for TFE, dummy command handling */
+			CAM_WARN(CAM_ISP, "ctx :%u hw_ctx_cnt %d grp_cfg_index :%d",
+				ctx->ctx_index,
+				isp_hw_cmd_args->u.active_hw_ctx.hw_ctx_cnt,
+				isp_hw_cmd_args->u.active_hw_ctx.stream_grp_cfg_index);
+			rc = -EOPNOTSUPP;
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x, ISP HW mgr cmd:0x%x",

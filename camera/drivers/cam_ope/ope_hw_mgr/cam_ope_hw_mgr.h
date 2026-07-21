@@ -22,6 +22,7 @@
 #include "ope_hw.h"
 #include "cam_cdm_intf_api.h"
 #include "cam_req_mgr_timer.h"
+#include "cam_cpas_api.h"
 
 #define OPE_CTX_MAX               32
 #define CAM_FRAME_CMD_MAX         20
