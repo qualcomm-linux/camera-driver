@@ -1896,8 +1896,9 @@ static int cam_ope_mgr_create_kmd_buf(struct cam_ope_hw_mgr *hw_mgr,
 
 	ope_req->genirq_buff_info.handle         = ope_req->ope_kmd_buf.mem_handle;
 	ope_req->genirq_buff_info.cpu_addr       = (uint32_t *)ope_req->ope_kmd_buf.cpu_addr;
-	ope_req->genirq_buff_info.offset         = prepare_req.kmd_buf_offset;
-	ope_req->genirq_buff_info.used_bytes     = 0;
+	ope_req->genirq_buff_info.offset         = ope_req->ope_kmd_buf.offset +
+		prepare_req.kmd_buf_offset;
+	ope_req->genirq_buff_info.used_bytes     = prepare_req.kmd_buf_offset;
 	ope_req->genirq_buff_info.size           = ope_req->ope_kmd_buf.size -
 		ope_req->ope_kmd_buf.len - prepare_req.kmd_buf_offset;
 

@@ -1380,10 +1380,10 @@ static int cam_ope_dev_create_kmd_buf_nrt(struct cam_ope_hw_mgr *hw_mgr,
 	cam_ope_dev_prepare_cdm_request(ope_dev_prepare_req->hw_mgr,
 		ope_dev_prepare_req->prepare_args,
 		ope_dev_prepare_req->ctx_data, ope_dev_prepare_req->req_idx,
-		ope_dev_prepare_req->kmd_buf_offset, ope_dev_prepare_req,
+		kmd_buff_offset, ope_dev_prepare_req,
 		len, false);
 
-	ope_dev_prepare_req->kmd_buf_offset += len;
+	ope_dev_prepare_req->kmd_buf_offset = kmd_buff_offset + len;
 end:
 	return rc;
 }
