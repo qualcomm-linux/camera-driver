@@ -198,7 +198,7 @@ static inline int cam_gpio_request_one(unsigned int gpio,
 
 #define IS_CSF25(x, y) ((((x) == 2) && ((y) == 5)) ? 1 : 0)
 
-struct cam_qcom_scm_pas_context {
+struct cam_qcom_pas_context {
 	struct device *dev;
 	u32 pas_id;
 	phys_addr_t mem_phys;
@@ -299,7 +299,7 @@ int cam_update_camnoc_qos_settings(uint32_t use_case_id,
 
 static inline void cam_qcom_pas_ctx_set_use_tzmem(void *ctx, bool enable)
 {
-	((struct cam_qcom_scm_pas_context *)ctx)->use_tzmem = enable;
+	((struct cam_qcom_pas_context *)ctx)->use_tzmem = enable;
 }
 
 int camera_i2c_compare_dev(struct device *dev, const void *data);

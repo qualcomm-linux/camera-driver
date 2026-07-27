@@ -136,7 +136,7 @@ struct cam_icp_ubwc_cfg_cmd {
 struct camera_firmware {
 	struct device *dev;
 	struct iommu_domain *iommu_domain;
-	struct cam_qcom_scm_pas_context *ctx;
+	struct cam_qcom_pas_context *ctx;
 	phys_addr_t mem_phys;
 	size_t mem_size;
 	bool has_el2_iommu;
