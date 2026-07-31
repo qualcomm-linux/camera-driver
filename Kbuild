@@ -175,6 +175,8 @@ ccflags-y += \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope/ope_hw_mgr \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope/ope_hw_mgr/ope_hw \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope/ope_hw_mgr/ope_hw/bus_rd \
+	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_ope/ope_hw_mgr/ope_hw/bus_wr \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_tpg \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_flash \
 	-I$(CAMERA_KERNEL_ROOT)/camera/drivers/cam_sensor_module/cam_actuator \

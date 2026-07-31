@@ -582,7 +582,7 @@ static int cam_ope_bus_rd_prepare(struct ope_hw *ope_hw_info,
 	if ((size * 4) > avaliable_size) {
 		CAM_ERR(CAM_OPE, "buf size:%d is not sufficient, expected: %d",
 			avaliable_size, size * 4);
-		return NULL;
+		return -EINVAL;
 	}
 
 	write_len = (count + header_size) * sizeof(uint32_t);

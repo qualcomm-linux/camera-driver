@@ -32,6 +32,7 @@
 #include "cam_smmu_api.h"
 #include "camera_main.h"
 #include "cam_context_utils.h"
+#include "ope_dev_intf.h"
 
 #define OPE_DEV_NAME        "cam-ope"
 
