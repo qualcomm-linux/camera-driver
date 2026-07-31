@@ -6,6 +6,9 @@
 
 #include <linux/of_address.h>
 #include <linux/firmware/qcom/qcom_scm.h>
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+#include <linux/firmware/qcom/qcom_pas.h>
+#endif
 #include <linux/soc/qcom/mdt_loader.h>
 #include <linux/kallsyms.h>
 
@@ -35,16 +38,16 @@ typedef void *(*devm_qcom_scm_pas_context_alloc_t)(
 		struct device *dev, u32 pas_id, u64 start, size_t size);
 
 typedef int (*qcom_mdt_pas_load_t)(
-		struct cam_qcom_scm_pas_context *ctx,
+		void *ctx,
 		const struct firmware *fw,
 		const char *firmware,
 		phys_addr_t *reloc_base);
 
 typedef void (*qcom_scm_pas_metadata_release_t)(
-		struct cam_qcom_scm_pas_context *ctx);
+		void *ctx);
 
 typedef int (*qcom_scm_pas_prepare_and_auth_reset_t)(
-		struct cam_qcom_scm_pas_context *ctx);
+		void *ctx);
 
 static const struct hfi_ops hfi_icp_v2_ops = {
 	.irq_raise = cam_icp_v2_irq_raise,
@@ -623,8 +626,10 @@ static int __load_firmware(struct platform_device *pdev,
 	ssize_t fw_size;
 	devm_qcom_scm_pas_context_alloc_t fn_devm_qcom_scm_pas_context_alloc = NULL;
 	qcom_mdt_pas_load_t fn_qcom_mdt_pas_load = NULL;
-	qcom_scm_pas_metadata_release_t fn_qcom_scm_pas_metadata_release = NULL;
 	int rc;
+#if !IS_ENABLED(CONFIG_QCOM_PAS)
+	qcom_scm_pas_metadata_release_t fn_qcom_scm_pas_metadata_release = NULL;
+#endif
 
 	if (!pdev) {
 		CAM_ERR(CAM_ICP, "invalid args");
@@ -681,6 +686,11 @@ static int __load_firmware(struct platform_device *pdev,
 		goto out;
 	}
 
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+	fw->ctx = (struct cam_qcom_pas_context *)
+		devm_qcom_pas_context_alloc(&pdev->dev, fw_pas_id,
+					    res_start, res_size);
+#else
 	fn_devm_qcom_scm_pas_context_alloc = (devm_qcom_scm_pas_context_alloc_t)
 		__symbol_get("devm_qcom_scm_pas_context_alloc");
 
@@ -692,6 +702,7 @@ static int __load_firmware(struct platform_device *pdev,
 
 	fw->ctx = fn_devm_qcom_scm_pas_context_alloc
 		(&pdev->dev, fw_pas_id, res_start, res_size);
+#endif
 	if (IS_ERR_OR_NULL(fw->ctx)) {
 		rc = fw->ctx ? PTR_ERR(fw->ctx) : -ENOMEM;
 		CAM_ERR(CAM_ICP, "PAS context alloc failed rc=%d", rc);
@@ -723,6 +734,9 @@ static int __load_firmware(struct platform_device *pdev,
 	CAM_DBG(CAM_ICP, "res_start=0x%x, res_size=%zu", res_start, res_size);
 out:
 	if (fw->ctx) {
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+		qcom_pas_metadata_release((struct qcom_pas_context *)fw->ctx);
+#else
 		fn_qcom_scm_pas_metadata_release =
 				(qcom_scm_pas_metadata_release_t)
 				__symbol_get("qcom_scm_pas_metadata_release");
@@ -732,6 +746,7 @@ out:
 			fn_qcom_scm_pas_metadata_release(fw->ctx);
 			symbol_put_addr(fn_qcom_scm_pas_metadata_release);
 		}
+#endif
 	}
 	if (fn_devm_qcom_scm_pas_context_alloc)
 		symbol_put_addr(fn_devm_qcom_scm_pas_context_alloc);
@@ -792,6 +807,9 @@ static int cam_icp_v2_boot(struct cam_hw_info *icp_v2_info,
 		core_info->fw->mem_size = 0;
 	}
 
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+	rc = qcom_pas_prepare_and_auth_reset((struct qcom_pas_context *)core_info->fw->ctx);
+#else
 	fn_prepare_and_auth = (qcom_scm_pas_prepare_and_auth_reset_t)
 		__symbol_get("qcom_scm_pas_prepare_and_auth_reset");
 
@@ -801,6 +819,7 @@ static int cam_icp_v2_boot(struct cam_hw_info *icp_v2_info,
 	}
 
 	rc = fn_prepare_and_auth(core_info->fw->ctx);
+#endif
 	if (rc) {
 		CAM_ERR(CAM_ICP, "auth and reset failed rc=%d", rc);
 		goto err;
@@ -828,7 +847,11 @@ static int cam_icp_v2_shutdown(struct cam_hw_info *icp_v2_info)
 	prepare_shutdown(icp_v2_info);
 
 	if (core_info->use_sec_pil) {
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+		rc = qcom_pas_shutdown(soc_priv->fw_pas_id);
+#else
 		rc = qcom_scm_pas_shutdown(soc_priv->fw_pas_id);
+#endif
 		if (core_info->fw->has_el2_iommu)
 			iommu_unmap(core_info->fw->iommu_domain, 0,
 				core_info->fw->mem_size);
@@ -899,7 +922,11 @@ static int cam_icp_v2_core_control(struct cam_hw_info *icp_v2_info,
 		(struct cam_icp_soc_info *)icp_v2_info->soc_info.soc_private;
 
 	if (core_info->use_sec_pil) {
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+		rc = qcom_pas_set_remote_state(state, soc_priv->fw_pas_id);
+#else
 		rc = qcom_scm_set_remote_state(state, soc_priv->fw_pas_id);
+#endif
 		if (rc) {
 			CAM_ERR(CAM_ICP,
 				"remote state set to %s failed rc=%d",
