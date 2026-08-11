@@ -350,11 +350,14 @@ int cam_packet_util_process_patches(struct cam_packet *packet,
 	int        i  = 0;
 	int        rc = 0;
 	int32_t    hdl;
-	struct cam_patch_unique_src_buf_tbl
-		tbl[CAM_UNIQUE_SRC_HDL_MAX];
+	struct cam_patch_unique_src_buf_tbl *tbl = NULL;
 
-	memset(tbl, 0, CAM_UNIQUE_SRC_HDL_MAX *
-		sizeof(struct cam_patch_unique_src_buf_tbl));
+	tbl = kvcalloc(CAM_UNIQUE_SRC_HDL_MAX,
+		sizeof(struct cam_patch_unique_src_buf_tbl), GFP_KERNEL);
+	if (!tbl) {
+		CAM_ERR(CAM_UTIL, "Failed to allocate patch src buf table");
+		return -ENOMEM;
+	}
 
 	/* process patch descriptor */
 	patch_desc = (struct cam_patch_desc *)
@@ -374,14 +377,15 @@ int cam_packet_util_process_patches(struct cam_packet *packet,
 			CAM_ERR(CAM_UTIL,
 				"get_iova failed for patch[%d], src_buf_hdl: 0x%x: rc: %d",
 				i, patch_desc[i].src_buf_hdl, rc);
-			return rc;
+			goto free_tbl;
 		}
 
 		if ((size_t)patch_desc[i].src_offset >= src_buf_size) {
 			CAM_ERR(CAM_UTIL,
 				"Invalid src buf patch offset: patch:src_offset: 0x%x, src_buf_size: %zu",
 				patch_desc[i].src_offset, src_buf_size);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto free_tbl;
 		}
 
 		src_buf_iova_addr = (uint32_t *)iova_addr;
@@ -389,9 +393,15 @@ int cam_packet_util_process_patches(struct cam_packet *packet,
 
 		rc = cam_mem_get_cpu_buf(patch_desc[i].dst_buf_hdl,
 			&cpu_addr, &dst_buf_len);
-		if (rc < 0 || !cpu_addr || (dst_buf_len == 0)) {
+		if (rc < 0) {
 			CAM_ERR(CAM_UTIL, "unable to get dst buf address");
-			return rc;
+			goto free_tbl;
+		}
+		if (!cpu_addr || (dst_buf_len == 0)) {
+			CAM_ERR(CAM_UTIL, "invalid dst buf address or length");
+			cam_mem_put_cpu_buf(patch_desc[i].dst_buf_hdl);
+			rc = -EINVAL;
+			goto free_tbl;
 		}
 		dst_cpu_addr = (uint32_t *)cpu_addr;
 
@@ -405,7 +415,8 @@ int cam_packet_util_process_patches(struct cam_packet *packet,
 			CAM_ERR(CAM_UTIL,
 				"Invalid dst buf patch offset");
 			cam_mem_put_cpu_buf((int32_t)patch_desc[i].dst_buf_hdl);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto free_tbl;
 		}
 
 		dst_cpu_addr = (uint32_t *)((uint8_t *)dst_cpu_addr +
@@ -421,6 +432,8 @@ int cam_packet_util_process_patches(struct cam_packet *packet,
 		cam_mem_put_cpu_buf((int32_t)patch_desc[i].dst_buf_hdl);
 	}
 
+free_tbl:
+	kvfree(tbl);
 	return rc;
 }
 
