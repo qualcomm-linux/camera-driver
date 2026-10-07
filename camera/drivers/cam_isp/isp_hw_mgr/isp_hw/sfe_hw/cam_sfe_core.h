@@ -25,6 +25,8 @@ struct cam_sfe_hw_info {
 
 	uint32_t                            top_version;
 	void                               *top_hw_info;
+
+	bool                                sec_cfg_errata;
 };
 
 struct cam_sfe_hw_core_info {

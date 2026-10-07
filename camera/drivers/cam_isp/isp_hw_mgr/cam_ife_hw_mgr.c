@@ -5109,6 +5109,108 @@ static int cam_ife_mgr_check_and_update_fe_v2(
 	return 0;
 }
 
+static int cam_ife_mgr_check_and_update_fe_v3(
+	struct cam_ife_hw_mgr_ctx         *ife_ctx,
+	struct cam_isp_acquire_hw_info    *acquire_hw_info,
+	uint32_t                           acquire_info_size,
+	struct cam_ife_mgr_bw_data        *bw_data)
+{
+	int i;
+	bool is_sfe_rd = false, fetch_cfg = false;
+	struct cam_isp_in_port_info_v3    *in_port = NULL;
+	struct cam_ife_hw_concrete_ctx    *c_ctx = ife_ctx->concr_ctx;
+	uint32_t                           in_port_length = 0;
+	uint32_t                           total_in_port_length = 0;
+	uint32_t                           sfe_in_path_type = 0;
+
+	if (acquire_hw_info->input_info_offset >=
+		acquire_hw_info->input_info_size) {
+		CAM_ERR(CAM_ISP,
+			"Invalid size offset 0x%x is greater then size 0x%x ctx_idx: %u",
+			acquire_hw_info->input_info_offset,
+			acquire_hw_info->input_info_size, c_ctx->ctx_index);
+		return -EINVAL;
+	}
+	in_port = (struct cam_isp_in_port_info_v3 *)
+		((uint8_t *)&acquire_hw_info->data +
+		 acquire_hw_info->input_info_offset);
+	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
+
+		if (((uint8_t *)in_port +
+			sizeof(struct cam_isp_in_port_info_v3)) >
+			((uint8_t *)acquire_hw_info +
+			acquire_info_size)) {
+			CAM_ERR(CAM_ISP, "Invalid size, ctx_idx: %u", c_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		if ((in_port->num_out_res > (max_ife_out_res +
+			max_sfe_out_res)) ||
+			(in_port->num_out_res <= 0)) {
+			CAM_ERR(CAM_ISP, "Invalid num output res %u, ctx_idx: %u",
+				in_port->num_out_res, c_ctx->ctx_index);
+			return -EINVAL;
+		}
+
+		in_port_length = sizeof(struct cam_isp_in_port_info_v3) +
+			(in_port->num_out_res - 1) *
+			sizeof(struct cam_isp_out_port_info_v3);
+		total_in_port_length += in_port_length;
+
+		if (total_in_port_length > acquire_hw_info->input_info_size) {
+			CAM_ERR(CAM_ISP, "buffer size is not enough, ctx_idx: %u",
+				c_ctx->ctx_index);
+			return -EINVAL;
+		}
+		CAM_DBG(CAM_ISP, "in_port%d res_type 0x%x ctx_idx: %u", i,
+			in_port->phy_info.res_type, c_ctx->ctx_index);
+		sfe_in_path_type = in_port->csid_info.params[
+			CAM_ISP_IN_PORT_CSID_PARAM_IDX_SFE_IN_PATH_TYPE];
+		is_sfe_rd = cam_ife_mgr_check_for_sfe_rd(sfe_in_path_type);
+		if (is_sfe_rd)
+			c_ctx->scratch_buf_info.num_fetches++;
+
+		if ((!fetch_cfg) && ((in_port->phy_info.res_type ==
+			CAM_ISP_IFE_IN_RES_RD) || is_sfe_rd)) {
+			c_ctx->flags.is_fe_enabled = true;
+
+			/* Check for offline */
+			if (in_port->feature_mask & CAM_ISP_OFFLINE_MODE_EN) {
+				c_ctx->flags.is_offline = true;
+				bw_data->format = in_port->csid_info.format;
+				bw_data->width = in_port->csid_info.width;
+				bw_data->height = in_port->csid_info.height;
+				bw_data->framerate = in_port->csid_info.params[
+					CAM_ISP_IN_PORT_CSID_PARAM_IDX_OFFLINE_FPS];
+			}
+			/* Check for inline fetch modes */
+			if ((is_sfe_rd) && (!c_ctx->flags.is_offline)) {
+			/* Check for SFE FS mode - SFE PP bypass */
+				if (in_port->feature_mask & CAM_ISP_SFE_FS_MODE_EN)
+					c_ctx->flags.is_sfe_fs = true;
+				else
+					c_ctx->flags.is_sfe_shdr = true;
+			}
+
+			/* If once configured skip these checks thereafter */
+			fetch_cfg = true;
+		}
+
+		in_port = (struct cam_isp_in_port_info_v3 *)
+			((uint8_t *)in_port + in_port_length);
+	}
+
+	CAM_DBG(CAM_ISP,
+		"fe_enabled %d offline %d sfe_fs %d sfe_shdr: %d num_sfe_fetches: %u ctx_idx: %u",
+		c_ctx->flags.is_fe_enabled,
+		c_ctx->flags.is_offline,
+		c_ctx->flags.is_sfe_fs,
+		c_ctx->flags.is_sfe_shdr,
+		c_ctx->scratch_buf_info.num_fetches,
+		c_ctx->ctx_index);
+	return 0;
+}
+
 static int cam_ife_mgr_check_and_update_fe(
 	struct cam_ife_hw_mgr_ctx         *ife_ctx,
 	struct cam_isp_acquire_hw_info    *acquire_hw_info,
@@ -5133,8 +5235,9 @@ static int cam_ife_mgr_check_and_update_fe(
 			ife_ctx, acquire_hw_info, acquire_info_size,
 			bw_data);
 	case 3:
-		CAM_DBG(CAM_ISP, "FE updates not applicable");
-		break;
+		return cam_ife_mgr_check_and_update_fe_v3(
+			ife_ctx, acquire_hw_info, acquire_info_size,
+			bw_data);
 	default:
 		CAM_ERR(CAM_ISP, "Invalid ver of user common info:  minor %u major %u",
 			minor_ver, major_ver);
@@ -5255,6 +5358,7 @@ static int cam_ife_hw_mgr_acquire_offline_res_ife_camif(
 	struct cam_isp_hw_mgr_res                  *ife_src_res;
 	struct cam_isp_hw_mgr_res                  *isp_bus_rd_res;
 	struct cam_ife_hw_mgr                      *ife_hw_mgr;
+	struct cam_ife_csid_hw_caps                *csid_caps;
 
 	ife_hw_mgr = c_ctx->hw_mgr;
 
@@ -5328,6 +5432,17 @@ static int cam_ife_hw_mgr_acquire_offline_res_ife_camif(
 		hw_intf->hw_idx);
 	acquired_hw_path[i] |= cam_convert_res_id_to_hw_path(
 		ife_src_res->hw_res[0]->res_id, -1);
+
+	/*
+	 * RDI0 is acquired by default for the offline use-case; report it
+	 * in acquired_hw_path so UMD can program it via its own command
+	 * buffer. CSID900 doesn't set this path bit on its own, so derive
+	 * it from CSID hw caps (major_version == 9, minor_version == 0).
+	 */
+	csid_caps = cam_ife_hw_mgr_get_csid_hw_caps(ife_ctx);
+	if (csid_caps && csid_caps->major_version == 9 &&
+		csid_caps->minor_version == 0)
+		acquired_hw_path[i] |= CAM_ISP_RDI0_PATH;
 
 	CAM_DBG(CAM_ISP, "Acquired VFE:%d CAMIF for LEFT, ctx_idx: %u",
 		ife_src_res->hw_res[0]->hw_intf->hw_idx, c_ctx->ctx_index);
@@ -6147,6 +6262,12 @@ static inline void cam_ife_mgr_acquire_get_feature_flag_params_v3(
 	in_port->can_use_lite             = in->feature_mask & CAM_ISP_CAN_USE_LITE_MODE;
 	in_port->aeb_mode                 = in->feature_mask & CAM_ISP_AEB_MODE_EN;
 	in_port->dynamic_hdr_switch_en    = in->feature_mask & CAM_ISP_HDR_MODE_DYNAMIC_SWITCH_EN;
+	/* OR in this port's bit so a context-wide true is never cleared here */
+	in_port->is_offline = in_port->is_offline ||
+		!!(in->feature_mask & CAM_ISP_OFFLINE_MODE_EN);
+	/* offline is only possible as SFE+IFE in the v3 flow */
+	in_port->sfe_ife_enable = in_port->is_offline &&
+		cam_ife_mgr_check_for_sfe_rd(in_port->sfe_in_path_type);
 }
 
 static inline void cam_ife_mgr_acquire_get_feature_flag_params(
@@ -6217,6 +6338,9 @@ static int cam_ife_mgr_acquire_get_unified_structure_v3(
 	in_port->left_width               =  in->csid_info.width;
 	in_port->height                   =  in->csid_info.height;
 	in_port->num_out_res              =  in->num_out_res;
+	in_port->sfe_in_path_type         =  in->csid_info.params[
+		CAM_ISP_IN_PORT_CSID_PARAM_IDX_SFE_IN_PATH_TYPE];
+	in_port->fe_unpacker_fmt          =  in->csid_info.format & CAM_IFE_DECODE_FORMAT_MASK;
 
 	cam_ife_mgr_acquire_get_feature_flag_params_v3(in, in_port);
 
@@ -6475,6 +6599,7 @@ static int cam_ife_mgr_acquire_offline_out(
 			sizeof(struct cam_isp_in_port_generic_info),
 			GFP_KERNEL);
 	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
+		ife_ctx->in_ports[i].is_offline = ife_ctx->is_offline;
 		rc = cam_ife_mgr_acquire_get_unified_structure(acquire_hw_info,
 			i, &input_size, &ife_ctx->in_ports[i]);
 	}
@@ -17972,7 +18097,15 @@ static int cam_ife_hw_mgr_event_handler_offline(
 		ctx_idx_rd = c_ctx->served_ctx_w;
 		break;
 	case CAM_ISP_HW_EVENT_SOF:
+		ctx_idx_rd = c_ctx->served_ctx_w;
+		break;
 	case CAM_ISP_HW_EVENT_REG_UPDATE:
+		/*
+		 * On HW revisions without a real EPOCH IRQ (e.g. is_mc_path),
+		 * served_ctx_r is never committed on EPOCH, so commit it here
+		 * instead - RUP always precedes EPOCH for a given frame.
+		 */
+		c_ctx->served_ctx_r = c_ctx->served_ctx_w;
 		ctx_idx_rd = c_ctx->served_ctx_w;
 		break;
 	case CAM_ISP_HW_EVENT_EOF:
@@ -19377,6 +19510,94 @@ static int cam_ife_mgr_check_fe_v2(
 	return 0;
 }
 
+static int cam_ife_mgr_check_fe_v3(
+	struct cam_isp_acquire_hw_info    *acquire_hw_info,
+	uint32_t                           acquire_info_size,
+	bool                              *is_fe_enabled,
+	bool                              *is_offline,
+	struct cam_ife_mgr_bw_data        *bw_data)
+{
+	int i;
+	bool is_sfe_rd = false, fetch_cfg = false;
+	struct cam_isp_in_port_info_v3    *in_port = NULL;
+	uint32_t                           in_port_length = 0;
+	uint32_t                           total_in_port_length = 0;
+	uint32_t                           sfe_in_path_type = 0;
+
+	if (acquire_hw_info->input_info_offset >=
+		acquire_hw_info->input_info_size) {
+		CAM_ERR(CAM_ISP,
+			"Invalid size offset 0x%x is greater then size 0x%x",
+			acquire_hw_info->input_info_offset,
+			acquire_hw_info->input_info_size);
+		return -EINVAL;
+	}
+
+	*is_fe_enabled = false;
+	*is_offline = false;
+	in_port = (struct cam_isp_in_port_info_v3 *)
+		((uint8_t *)&acquire_hw_info->data +
+		 acquire_hw_info->input_info_offset);
+	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
+
+		if (((uint8_t *)in_port +
+			sizeof(struct cam_isp_in_port_info_v3)) >
+			((uint8_t *)acquire_hw_info +
+			acquire_info_size)) {
+			CAM_ERR(CAM_ISP, "Invalid size");
+			return -EINVAL;
+		}
+
+		if ((in_port->num_out_res > (max_ife_out_res +
+			max_sfe_out_res)) ||
+			(in_port->num_out_res <= 0)) {
+			CAM_ERR(CAM_ISP, "Invalid num output res %u",
+				in_port->num_out_res);
+			return -EINVAL;
+		}
+
+		in_port_length = sizeof(struct cam_isp_in_port_info_v3) +
+			(in_port->num_out_res - 1) *
+			sizeof(struct cam_isp_out_port_info_v3);
+		total_in_port_length += in_port_length;
+
+		if (total_in_port_length > acquire_hw_info->input_info_size) {
+			CAM_ERR(CAM_ISP, "buffer size is not enough");
+			return -EINVAL;
+		}
+		CAM_DBG(CAM_ISP, "in_port%d res_type %d", i,
+			in_port->phy_info.res_type);
+		sfe_in_path_type = in_port->csid_info.params[
+			CAM_ISP_IN_PORT_CSID_PARAM_IDX_SFE_IN_PATH_TYPE];
+		is_sfe_rd = cam_ife_mgr_check_for_sfe_rd(sfe_in_path_type);
+
+		if ((!fetch_cfg) && ((in_port->phy_info.res_type ==
+			CAM_ISP_IFE_IN_RES_RD) || is_sfe_rd)) {
+
+			*is_fe_enabled = true;
+			if (in_port->feature_mask & CAM_ISP_OFFLINE_MODE_EN) {
+				*is_offline = true;
+				bw_data->format = in_port->csid_info.format;
+				bw_data->width = in_port->csid_info.width;
+				bw_data->height = in_port->csid_info.height;
+				bw_data->framerate = in_port->csid_info.params[
+					CAM_ISP_IN_PORT_CSID_PARAM_IDX_OFFLINE_FPS];
+			}
+
+			/* If once configured skip these checks thereafter */
+			fetch_cfg = true;
+			break;
+		}
+
+		in_port = (struct cam_isp_in_port_info_v3 *)
+			((uint8_t *)in_port + in_port_length);
+	}
+	CAM_DBG(CAM_ISP, "is_fe_enabled %d is_offline %d",
+		*is_fe_enabled, *is_offline);
+
+	return 0;
+}
+
 static int cam_ife_mgr_check_fe(
 	struct cam_isp_acquire_hw_info    *acquire_hw_info,
 	uint32_t                           acquire_info_size,
@@ -19406,10 +19627,11 @@ static int cam_ife_mgr_check_fe(
 			bw_data);
 		break;
 	case 3:
-		CAM_DBG(CAM_ISP, "FE updates not applicable");
-		*is_offline = false;
-		*is_fe_enabled = false;
-		break;
+		return cam_ife_mgr_check_fe_v3(
+			acquire_hw_info, acquire_info_size,
+			is_fe_enabled,
+			is_offline,
+			bw_data);
 	default:
 		CAM_ERR(CAM_ISP, "Invalid ver of user common info:  minor %u major %u",
 			minor_ver, major_ver);

@@ -190,6 +190,11 @@ int cam_ife_mgr_check_start_processing(void *hw_mgr_priv,
 				CAM_DBG(CAM_ISP, "#REJECT#: %s ctx id %d hw_id %d",
 				c_ctx->flags.init_cfg_done ? "Init already done" : "Init not done",
 				c_ctx->ctx_index, c_ctx->acquired_hw_id);
+				/* Stale init pkt, will never be used again; free it */
+				if (c_ctx->flags.init_cfg_done && is_init_pkt) {
+					list_del_init(&c_elem->list);
+					kfree(c_elem);
+				}
 				continue;
 			}
 			if (c_ctx->waiting_start &&
