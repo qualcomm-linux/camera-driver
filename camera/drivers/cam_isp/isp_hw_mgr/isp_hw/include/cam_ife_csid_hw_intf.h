@@ -129,6 +129,7 @@ enum cam_ife_csid_secondary_evt_type {
  * @minor_version:         minor version
  * @version_incr:          version increment
  * @sfe_ipp_input_rdi_res: RDI Res as an input to SFE
+ * @yuv_chroma_conversion_rdi_res: RDI paths capable of YUV chroma conversion
  * @is_lite:               is the ife_csid lite
  * @global_reset_en:       flag to indicate if global reset is enabled
  * @aup_rup_en:            flag to indicate if AUP RUP is on csid side
@@ -145,6 +146,7 @@ struct cam_ife_csid_hw_caps {
 	uint32_t      minor_version;
 	uint32_t      version_incr;
 	uint32_t      sfe_ipp_input_rdi_res;
+	uint32_t      yuv_chroma_conversion_rdi_res;
 	bool          is_lite;
 	bool          global_reset_en;
 	bool          aup_rup_en;

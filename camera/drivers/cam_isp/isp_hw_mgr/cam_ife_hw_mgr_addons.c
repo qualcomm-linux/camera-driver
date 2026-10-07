@@ -2009,6 +2009,7 @@ static int cam_ife_hw_mgr_update_vc_dt_pxl_path(
 }
 
 int cam_ife_hw_mgr_update_vc_dt_stream_grp(
+	struct cam_ife_hw_mgr_ctx           *ife_ctx,
 	struct cam_isp_hw_mgr_res           *isp_res,
 	int                                  index,
 	enum cam_ife_pix_path_res_id         path_res_id,
@@ -2017,13 +2018,20 @@ int cam_ife_hw_mgr_update_vc_dt_stream_grp(
 	int i, j, rc;
 	bool   found = false;
 	struct cam_ife_hw_mgr_stream_grp_config  *grp_cfg;
+	struct cam_ife_csid_hw_caps              *csid_caps = NULL;
+
+	if (is_rdi_path) {
+		csid_caps = cam_ife_hw_mgr_get_csid_hw_caps(ife_ctx);
+		if (!csid_caps)
+			return -EINVAL;
+	}
 
 	if (index != CAM_IFE_STREAM_GRP_INDEX_NONE) {
 		grp_cfg = g_ife_sns_grp_cfg.grp_cfg[index];
 		for (i = 0; i < grp_cfg->stream_cfg_cnt; i++) {
 			if (is_rdi_path) {
-				if ((path_res_id == CAM_IFE_PIX_PATH_RES_RDI_3 ||
-					path_res_id == CAM_IFE_PIX_PATH_RES_RDI_5)) {
+				if (BIT(path_res_id) &
+					csid_caps->yuv_chroma_conversion_rdi_res) {
 					if (grp_cfg->stream_cfg[i].color_filter_arrangement &&
 						!grp_cfg->stream_cfg[i].yuv_rdi_vc_dt_updated) {
 						for (j = grp_cfg->stream_cfg[i].rdi_vc_dt_updated;
