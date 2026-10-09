@@ -1040,6 +1040,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_0,
 			.supported_formats        =  BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
 				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |  BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
@@ -1080,6 +1081,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_1,
 			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_NV12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1119,6 +1121,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_2,
 			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_NV12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1158,6 +1161,7 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_3,
 			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_NV12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1270,7 +1274,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_6,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1309,7 +1316,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_7,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1348,7 +1358,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_8,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1387,7 +1400,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_9,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1426,7 +1442,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_10,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1465,7 +1484,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_11,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1504,7 +1526,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_12,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
@@ -1543,7 +1568,10 @@ static struct cam_vfe_bus_ver3_hw_info vfe900_bus_hw_info = {
 			/* IMG comp-done grp (CSID BUF_DONE_IRQ_STATUS SUBGRP0 bits 3:0) */
 			.comp_group               = CAM_VFE_BUS_VER3_COMP_GRP_0,
 			.ubwc_regs                = &vfe900_ubwc_regs_client_13,
-			.supported_formats        = BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+			.supported_formats        = BIT_ULL(CAM_FORMAT_UBWC_NV12) |
+				BIT_ULL(CAM_FORMAT_NV12) |
+				BIT_ULL(CAM_FORMAT_BAYER_UBWC_TP10) |
+				BIT_ULL(CAM_FORMAT_UBWC_TP10) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_10) | BIT_ULL(CAM_FORMAT_MIPI_RAW_12) |
 				BIT_ULL(CAM_FORMAT_MIPI_RAW_14) | BIT_ULL(CAM_FORMAT_PLAIN8) |
 				BIT_ULL(CAM_FORMAT_PLAIN16_8) | BIT_ULL(CAM_FORMAT_PLAIN16_10) |
