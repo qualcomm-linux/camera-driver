@@ -441,8 +441,6 @@ static int csiphy_qmargin_get(char *buffer, const struct kernel_param *kp)
 		}
 	}
 
-	csiphy_qmargin[0] = '\0';
-
 	return bytes_written;
 }
 
@@ -3008,6 +3006,14 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		}
 
 		if (!csiphy_dev->acquire_count) {
+			struct csiphy_qmargin_csid_output saved_qmargin_csid_output =
+				csiphy_dev->qmargin_data.qmargin_csid_output;
+			unsigned int saved_qmargin_output_regs[CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT];
+
+			memcpy(saved_qmargin_output_regs,
+				csiphy_dev->qmargin_data.csiphy_qmargin_output_regs,
+				sizeof(saved_qmargin_output_regs));
+
 			g_phy_data[soc_info->index].is_3phase = csiphy_acq_params.csiphy_3phase;
 			CAM_DBG(CAM_CSIPHY,
 				"g_csiphy data is updated for index: %d is_3phase: %u",
@@ -3015,6 +3021,19 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 				g_phy_data[soc_info->index].is_3phase);
 			memset(&csiphy_dev->qmargin_data, 0,
 				sizeof(struct csiphy_qmargin_sweep_data));
+
+			/*
+			 * qmargin_csid_output/csiphy_qmargin_output_regs accumulate
+			 * CSID-reported results across the whole csiphy_qmargin selector
+			 * session (cleared only on csiphy_qmargin_get() read-out), while
+			 * a re-acquire mid-session (e.g. NHX.QMarginTest re-acquiring the
+			 * PHY between sub-tests) must still reset the CDR/EQ/lofreq
+			 * register-capture fields above for the next cycle. Preserve the
+			 * CSID output so an error latched in an earlier cycle isn't lost.
+			 */
+			csiphy_dev->qmargin_data.qmargin_csid_output = saved_qmargin_csid_output;
+			memcpy(csiphy_dev->qmargin_data.csiphy_qmargin_output_regs,
+				saved_qmargin_output_regs, sizeof(saved_qmargin_output_regs));
 		}
 
 		if (g_phy_data[soc_info->index].aon_cam_id != NOT_AON_CAM) {
