@@ -7,6 +7,7 @@
 #include "cam_cci_dev.h"
 #include "cam_req_mgr_dev.h"
 #include "cam_sensor_util.h"
+#include <dt-bindings/msm-camera.h>
 #include "cam_cci_soc.h"
 #include "cam_cci_core.h"
 #include "camera_main.h"
@@ -550,20 +551,6 @@ int cam_cci_fsync_core_cfg(struct v4l2_subdev *sd,
 	default:
 		rc = -ENOIOCTLCMD;
 		break;
-	}
-
-	return rc;
-}
-
-static int __cci_init_gpio_queue(struct cci_device *cci_dev)
-{
-	int rc = 0;
-	int i = 0;
-
-	for (i = 0; i < GPIO_Q_MAX; i++) {
-		mutex_init(&(cci_dev->gpio_queue[i].gpio_q_mutex));
-		cci_dev->gpio_queue[i].fps = 0;
-		cci_dev->gpio_queue[i].is_acquired = false;
 	}
 
 	return rc;
@@ -1287,7 +1274,7 @@ static int cam_cci_component_bind(struct device *dev,
 	mutex_init(&(new_cci_dev->init_mutex));
 	CAM_DBG(CAM_CCI, "Device Type :%d", soc_info->index);
 
-	__cci_init_gpio_queue(new_cci_dev);
+	cam_cci_reset_gpio_queue(new_cci_dev);
 	cpas_parms.cam_cpas_client_cb = NULL;
 	cpas_parms.cell_index = soc_info->index;
 	cpas_parms.dev = &pdev->dev;
@@ -1363,70 +1350,6 @@ static void cam_cci_component_unbind(struct device *dev,
 		CAM_ERR(CAM_CCI, "Fail with cam_unregister_subdev. rc:%d", rc);
 	devm_kfree(&pdev->dev, cci_dev);
 }
-
-static const struct component_ops cam_cci_component_ops = {
-	.bind = cam_cci_component_bind,
-	.unbind = cam_cci_component_unbind,
-};
-
-static int cam_cci_platform_probe(struct platform_device *pdev)
-{
-	int rc = 0;
-
-	CAM_DBG(CAM_CCI, "Adding CCI component");
-	rc = component_add(&pdev->dev, &cam_cci_component_ops);
-	if (rc)
-		CAM_ERR(CAM_CCI, "failed to add component rc: %d", rc);
-
-	return rc;
-}
-
-static void cam_cci_device_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &cam_cci_component_ops);
-}
-
-static const struct of_device_id cam_cci_dt_match[] = {
-	/* Standalone legacy CCI — existing SoCs (Lemans, etc.) */
-	{ .compatible = "qcom,cci",
-	  .data = &cam_cci_hw_info_standalone },
-	/* CCU wrapper — legacy CCI path (Auto SoCs, nordschleife) */
-	{ .compatible = "qcom,ccu-cci",
-	  .data = &cam_cci_hw_info_ccu_legacy },
-	/* CCU wrapper — QuP I2C path (future) */
-	{ .compatible = "qcom,ccu-qup-i2c",
-	  .data = &cam_cci_hw_info_ccu_qup },
-	{}
-};
-
-MODULE_DEVICE_TABLE(of, cam_cci_dt_match);
-
-struct platform_driver cci_driver = {
-	.probe = cam_cci_platform_probe,
-	.remove = cam_cci_device_remove,
-	.driver = {
-		.name = CAMX_CCI_DEV_NAME,
-		.owner = THIS_MODULE,
-		.of_match_table = cam_cci_dt_match,
-		.suppress_bind_attrs = true,
-	},
-};
-
-int cam_cci_init_module(void)
-{
-	return platform_driver_register(&cci_driver);
-}
-
-void cam_cci_exit_module(void)
-{
-#ifdef CONFIG_SPECTRA_SENSOR_SYSFS_UTIL
-	cam_sysfs_exit();
-#endif /*CONFIG_SPECTRA_SENSOR_SYSFS_UTIL*/
-	platform_driver_unregister(&cci_driver);
-}
-
-MODULE_DESCRIPTION("MSM CCI driver");
-MODULE_LICENSE("GPL v2");
 
 static const char *cam_cci_gpio_cmd_type_str(enum cam_cci_gpio_cmd_type cmd)
 {
@@ -1741,3 +1664,67 @@ int cam_cci_write_gpio_cmd_buf(void __iomem *base, uint32_t reg_addr,
 
 	return 0;
 }
+
+static const struct component_ops cam_cci_component_ops = {
+	.bind = cam_cci_component_bind,
+	.unbind = cam_cci_component_unbind,
+};
+
+static int cam_cci_platform_probe(struct platform_device *pdev)
+{
+	int rc = 0;
+
+	CAM_DBG(CAM_CCI, "Adding CCI component");
+	rc = component_add(&pdev->dev, &cam_cci_component_ops);
+	if (rc)
+		CAM_ERR(CAM_CCI, "failed to add component rc: %d", rc);
+
+	return rc;
+}
+
+static void cam_cci_device_remove(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &cam_cci_component_ops);
+}
+
+static const struct of_device_id cam_cci_dt_match[] = {
+	/* Standalone legacy CCI — existing SoCs (Lemans, etc.) */
+	{ .compatible = "qcom,cci",
+	  .data = &cam_cci_hw_info_standalone },
+	/* CCU wrapper — legacy CCI path (Auto SoCs, nordschleife) */
+	{ .compatible = "qcom,ccu-cci",
+	  .data = &cam_cci_hw_info_ccu_legacy },
+	/* CCU wrapper — QuP I2C path (future) */
+	{ .compatible = "qcom,ccu-qup-i2c",
+	  .data = &cam_cci_hw_info_ccu_qup },
+	{}
+};
+
+MODULE_DEVICE_TABLE(of, cam_cci_dt_match);
+
+struct platform_driver cci_driver = {
+	.probe = cam_cci_platform_probe,
+	.remove = cam_cci_device_remove,
+	.driver = {
+		.name = CAMX_CCI_DEV_NAME,
+		.owner = THIS_MODULE,
+		.of_match_table = cam_cci_dt_match,
+		.suppress_bind_attrs = true,
+	},
+};
+
+int cam_cci_init_module(void)
+{
+	return platform_driver_register(&cci_driver);
+}
+
+void cam_cci_exit_module(void)
+{
+#ifdef CONFIG_SPECTRA_SENSOR_SYSFS_UTIL
+	cam_sysfs_exit();
+#endif /*CONFIG_SPECTRA_SENSOR_SYSFS_UTIL*/
+	platform_driver_unregister(&cci_driver);
+}
+
+MODULE_DESCRIPTION("MSM CCI driver");
+MODULE_LICENSE("GPL v2");

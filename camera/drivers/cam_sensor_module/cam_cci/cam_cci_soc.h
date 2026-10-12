@@ -42,4 +42,11 @@ int cam_cci_parse_dt_info(struct cci_device *new_cci_dev);
  */
 void cam_cci_soc_remove(struct platform_device *pdev,
 	struct cci_device *cci_dev);
+
+/**
+ * @cci_dev: CCI device structure
+ *
+ * This API initialize GPIO queues
+ */
+void cam_cci_reset_gpio_queue(struct cci_device *cci_dev);
 #endif /* _CAM_CCI_SOC_H_ */

@@ -130,6 +130,12 @@ struct cam_sensor_dev_res_info {
  *                    consumed once to set external_trigger then cleared
  * @per_frame_fsync:  Per-request GPIO fsync slots; one cmd_buf per queue
  *                    needed, indexed by req_id % MAX_PER_FRAME_ARRAY
+ * @fsync_infinite:   Stage-triggered (infinite mode) GPIO fsync configuration.
+ *                    Kept out of per_frame_fsync[] because it is armed at a
+ *                    stage boundary (ACQUIRE / STREAM_ON) where no request
+ *                    exists, so it cannot be keyed on a request id.
+ * @fsync_counted:    This sensor has already been counted towards the shared
+ *                    fsync trigger refcount for the current cycle
  */
 struct cam_sensor_ctrl_t {
 	char                           device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -174,6 +180,8 @@ struct cam_sensor_ctrl_t {
 	bool                           hw_no_probe_pw_ops;
 	bool                           fsync_blob_ready;
 	struct cam_sensor_fsync_slot   *per_frame_fsync;
+	struct cam_sensor_fsync_slot   fsync_infinite;
+	bool                           fsync_counted;
 #ifdef CONFIG_SPECTRA_SENSOR_SYSFS_UTIL
 	uint8_t                        pwr_ref_cnt;
 	struct kobject                 sysfs_kobj;
