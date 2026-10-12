@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_SENSOR_UTIL_H_
@@ -149,5 +149,31 @@ static inline int cam_sensor_util_aon_registration(uint32_t phy_idx, uint32_t ao
 	CAM_DBG(CAM_SENSOR, "Register phy_idx: %u for AON_Camera_ID: %d", phy_idx, aon_camera_id);
 	return cam_csiphy_util_update_aon_registration(phy_idx, aon_camera_id);
 }
+
+#define MAX_GPIO_INDEX 5
+
+/**
+ * cam_sensor_util_get_gpio_index - Map a GPIO number to its CCI hardware index
+ * @gpio_number: GPIO number to look up
+ *
+ * Maps physical GPIO numbers (109, 110, 111, 163, 164) to their
+ * corresponding CCI hardware indices (0-4).
+ *
+ * Returns: Hardware index on success, -EINVAL if GPIO number not found
+ */
+int cam_sensor_util_get_gpio_index(int64_t gpio_number);
+
+/**
+ * cam_sensor_util_validate_pulse_durations - Validate GPIO pulse widths against frame time
+ * @schema:        Pointer to GPIO timing schema; event_count is used internally
+ * @frame_time_us: Frame time limit in microseconds
+ *
+ * All delay accumulation is done in nanoseconds; frame_time_us is converted
+ * to ns for comparison.
+ *
+ * Returns: 0 on success, negative error code on failure
+ */
+int cam_sensor_util_validate_pulse_durations(struct cci_gpio_timing_schema *schema,
+	uint64_t frame_time_us);
 
 #endif /* _CAM_SENSOR_UTIL_H_ */

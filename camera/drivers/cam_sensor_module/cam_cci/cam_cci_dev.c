@@ -6,6 +6,7 @@
 
 #include "cam_cci_dev.h"
 #include "cam_req_mgr_dev.h"
+#include "cam_sensor_util.h"
 #include "cam_cci_soc.h"
 #include "cam_cci_core.h"
 #include "camera_main.h"
@@ -75,6 +76,396 @@ struct v4l2_subdev *cam_cci_get_subdev(int cci_dev_index)
 			cci_dev_index, MAX_CCI);
 
 	return sub_device;
+}
+
+
+/* Helper: GPIO command type -> human-readable string */
+#define CCI_POLL_TIMEOUT_US  50000
+#define CCI_POLL_INTERVAL_US 5
+
+static int __cci_find_free_gpio_queue(struct cci_device *cci_dev, int *queue)
+{
+	int i;
+
+	for (i = 0; i < GPIO_Q_MAX; i++) {
+		if (!cci_dev->gpio_queue[i].is_acquired) {
+			cci_dev->gpio_queue[i].is_acquired = true;
+			*queue = i;
+			CAM_DBG(CAM_CCI, "GPIO queue %d acquired", i);
+			return 0;
+		}
+	}
+
+	CAM_ERR(CAM_CCI, "No free GPIO queue available");
+	return -EBUSY;
+}
+
+static int __cci_configure_cpas(struct cci_device *cci_dev,
+	struct cam_cci_ctrl *c_ctrl)
+{
+	int rc = 0;
+	uint32_t cpas_handle = cci_dev->cpas_handle;
+	uint32_t top_mux;
+	uint32_t second_level_mux;
+	uint32_t val;
+	uint32_t cpas_mux_val = 0;
+	int cci_index = cci_dev->soc_info.index;
+	int cmd_type = c_ctrl->cmd;
+	int cci_timer_index;
+
+	rc = cam_cpas_reg_read(cpas_handle, CAM_CPAS_REGBASE_CPASTOP,
+		CCI_GPIO_CPAS_MUX_EN, true, &val);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "CPAS reg read failed rc=%d", rc);
+		return rc;
+	}
+
+	CAM_INFO(CAM_CCI, "BEFORE WRITE CPAS VALUE: 0x%x", val);
+
+	/*
+	 * TODO (fsync redesign item 3): compute timer mask dynamically
+	 * by walking all registered cci_clients on cci_dev and OR-ing
+	 * their timer_mask values. For now use -1 (enables all timers)
+	 * which matches the previous behaviour.
+	 */
+	cci_timer_index = -1;
+
+	if (cmd_type == MSM_CCI_TIMER_FSYNC_ALL ||
+	    cmd_type == MSM_CCI_TIMER_FSYNC_INDEPENDENT) {
+		switch (cci_index) {
+		case 0:
+			CAM_INFO(CAM_CCI,
+				"cci: %d is about to enable all cci timers",
+				cci_index);
+			top_mux = BIT(CCI_TIMER0) | BIT(CCI_TIMER1) |
+				BIT(CCI_TIMER2) | BIT(CCI_TIMER3) |
+				BIT(CCI_TIMER4);
+			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
+				second_level_mux = BIT(CCI_TIMER0) |
+					BIT(CCI_TIMER1) | BIT(CCI_TIMER2) |
+					BIT(CCI_TIMER3) | BIT(CCI_TIMER4);
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+			} else {
+				second_level_mux = 0x00;
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9;
+			}
+			cpas_mux_val = top_mux | second_level_mux;
+			break;
+		case 2:
+			CAM_INFO(CAM_CCI,
+				"cci: %d is about to enable all cci timers",
+				cci_index);
+			top_mux = BIT(CCI_TIMER5) | BIT(CCI_TIMER6) |
+				BIT(CCI_TIMER7) | BIT(CCI_TIMER8) |
+				BIT(CCI_TIMER9);
+			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
+				second_level_mux = 0x00;
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+			} else {
+				second_level_mux = BIT(CCI_TIMER5) |
+					BIT(CCI_TIMER6) | BIT(CCI_TIMER7) |
+					BIT(CCI_TIMER8) | BIT(CCI_TIMER9);
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+			}
+			cpas_mux_val = top_mux | second_level_mux;
+			break;
+		case 1:
+			CAM_INFO(CAM_CCI,
+				"cci: %d is about to enable all cci timers",
+				cci_index);
+			top_mux = 0x00;
+			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
+				second_level_mux = BIT(CCI_TIMER0) |
+					BIT(CCI_TIMER1) | BIT(CCI_TIMER2) |
+					BIT(CCI_TIMER3) | BIT(CCI_TIMER4);
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+			} else {
+				second_level_mux = 0x00;
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9;
+			}
+			cpas_mux_val = top_mux | second_level_mux;
+			break;
+		case 3:
+			CAM_INFO(CAM_CCI,
+				"cci: %d is about to enable all cci timers",
+				cci_index);
+			top_mux = 0x00;
+			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
+				second_level_mux = 0x00;
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+			} else {
+				second_level_mux = BIT(CCI_TIMER5) |
+					BIT(CCI_TIMER6) | BIT(CCI_TIMER7) |
+					BIT(CCI_TIMER8) | BIT(CCI_TIMER9);
+				second_level_mux <<=
+					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+			}
+			cpas_mux_val = top_mux | second_level_mux;
+			break;
+		default:
+			CAM_ERR(CAM_CCI, "cci_index is not valid: %d",
+				cci_index);
+			return -EINVAL;
+		}
+	}
+
+	CAM_INFO(CAM_CCI, "CPAS_MUX_VAL: 0x%x", cpas_mux_val);
+	rc = cam_cpas_reg_write(cpas_handle, CAM_CPAS_REGBASE_CPASTOP,
+		CCI_GPIO_CPAS_MUX_EN, true, cpas_mux_val);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "CPAS reg write failed rc=%d", rc);
+		return rc;
+	}
+
+	rc = cam_cpas_reg_read(cpas_handle, CAM_CPAS_REGBASE_CPASTOP,
+		CCI_GPIO_CPAS_MUX_EN, true, &val);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "CPAS reg read failed rc=%d", rc);
+		return rc;
+	}
+
+	CAM_INFO(CAM_CCI, "POST WRITE CPAS VALUE: 0x%x", val);
+	return rc;
+}
+
+static int cam_cci_poll_gpio_queue_empty(void __iomem *base, int queue)
+{
+	uint32_t wordcount;
+	int32_t timeout = CCI_POLL_TIMEOUT_US;
+
+	while (timeout > 0) {
+		wordcount = cam_io_r_mb(base +
+			(CCI_GPIO_WORD_COUNT_ADDR + (0x100 * queue)));
+		CAM_DBG(CAM_CCI, "GPIO queue word count: %u", wordcount);
+
+		if (wordcount == 0) {
+			CAM_DBG(CAM_CCI, "GPIO Q[%d]! Time passed: %d us",
+				queue, (CCI_POLL_TIMEOUT_US - timeout));
+			return 0;
+		}
+
+		usleep_range(CCI_POLL_INTERVAL_US, CCI_POLL_INTERVAL_US + 10);
+		timeout -= CCI_POLL_INTERVAL_US;
+	}
+
+	CAM_ERR(CAM_CCI, "Timeout polling GPIO Q[%d]! Remaining words: %d",
+		queue, wordcount);
+
+	return -ETIMEDOUT;
+}
+
+static int cam_cci_load_gpio_queue(struct v4l2_subdev *sd,
+	struct cam_cci_ctrl *c_ctrl,
+	const struct cam_cci_gpio_cmd_buf *cmd_buf)
+{
+	int rc = 0;
+	uint32_t reg_addr;
+	struct cam_hw_soc_info *soc_info = NULL;
+	void __iomem *base = NULL;
+	uint32_t wordcount = 0;
+	int queue = 0;
+	int queue_size = 0;
+	int i;
+	struct cci_device *cci_dev;
+
+	cci_dev = v4l2_get_subdevdata(sd);
+	if (!cci_dev || !c_ctrl || !cmd_buf) {
+		CAM_ERR(CAM_CCI,
+			"Invalid params cci_dev:%pK c_ctrl:%pK cmd_buf:%pK",
+			cci_dev, c_ctrl, cmd_buf);
+		return -EINVAL;
+	}
+
+	if (!cmd_buf->cmd_buf_ready || cmd_buf->cmd_count == 0) {
+		CAM_ERR(CAM_CCI, "cmd_buf not ready or empty: ready=%d count=%d",
+			cmd_buf->cmd_buf_ready, cmd_buf->cmd_count);
+		return -EINVAL;
+	}
+
+	mutex_lock(&cci_dev->init_mutex);
+	rc = __cci_find_free_gpio_queue(cci_dev, &queue);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "No free GPIO queue");
+		mutex_unlock(&cci_dev->init_mutex);
+		return rc;
+	}
+	c_ctrl->cci_info->acquired_gpio_queue = queue;
+
+	queue_size = (queue == GPIO_Q0 ?
+		CCI_GPIO_Q0_MAX_WORD_COUNT : CCI_GPIO_Q1_MAX_WORD_COUNT);
+
+	rc = __cci_configure_cpas(cci_dev, c_ctrl);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "CPAS Mux configuration failed");
+		goto release_queue;
+	}
+
+	if (queue_size < cmd_buf->cmd_count) {
+		CAM_ERR(CAM_CCI,
+			"cmd_buf (%u cmds) exceeds queue %d capacity (%d words)",
+			cmd_buf->cmd_count, queue, queue_size);
+		rc = -EINVAL;
+		goto release_queue;
+	}
+
+	soc_info = &cci_dev->soc_info;
+	base = soc_info->reg_map[0].mem_base;
+	reg_addr = CCI_GPIO_QUEUE_LOAD_ADDR(queue);
+
+	CAM_DBG(CAM_CCI, "Loading %u cmds into GPIO queue %d (reg=0x%x)",
+		cmd_buf->cmd_count, queue, reg_addr);
+
+	for (i = 0; i < cmd_buf->cmd_count; i++)
+		cam_io_w_mb(cmd_buf->buf[i], base + reg_addr);
+
+	wordcount = cam_io_r_mb(base +
+		(CCI_GPIO_WORD_COUNT_ADDR + (0x100 * queue)));
+	cam_io_w_mb(wordcount, base +
+		(CCI_GPIO_EXECUTE_WC_ADDR + (0x100 * queue)));
+
+	mutex_unlock(&cci_dev->init_mutex);
+	return 0;
+
+release_queue:
+	cci_dev->gpio_queue[queue].is_acquired = false;
+	c_ctrl->cci_info->acquired_gpio_queue = -1;
+	mutex_unlock(&cci_dev->init_mutex);
+	return rc;
+}
+
+static int __cci_gpio_queue_start(struct v4l2_subdev *sd,
+	struct cam_cci_ctrl *c_ctrl)
+{
+	int rc = 0;
+	struct cam_hw_soc_info *soc_info = NULL;
+	void __iomem *base = NULL;
+	struct cci_device *cci_dev = NULL;
+	uint32_t val, wordcount;
+
+	cci_dev = v4l2_get_subdevdata(sd);
+	if (!cci_dev || !c_ctrl) {
+		CAM_ERR(CAM_CCI,
+			"Failed: invalid params cci_dev:%pK, c_ctrl:%pK",
+			cci_dev, c_ctrl);
+		return -EINVAL;
+	}
+
+	soc_info = &cci_dev->soc_info;
+	base = soc_info->reg_map[0].mem_base;
+
+	wordcount = cam_io_r_mb(base + (CCI_GPIO_WORD_COUNT_ADDR +
+		(0x100 * (c_ctrl->cci_info->acquired_gpio_queue))));
+	if (wordcount == 0) {
+		CAM_DBG(CAM_CCI, "Queue is empty, nothing to be done!");
+		return 0;
+	}
+
+	val = 0x10 << (c_ctrl->cci_info->acquired_gpio_queue);
+	cam_io_w_mb(val, base + CCI_QUEUE_START_ADDR);
+
+	rc = cam_cci_poll_gpio_queue_empty(base,
+		c_ctrl->cci_info->acquired_gpio_queue);
+	if (rc)
+		CAM_ERR(CAM_CCI, "GPIO queue drain timeout: %d", rc);
+
+	return rc;
+}
+
+static int __cci_halt_gpio_queue(struct v4l2_subdev *sd,
+	struct cam_cci_ctrl *c_ctrl)
+{
+	int rc = 0;
+	struct cam_hw_soc_info *soc_info = NULL;
+	void __iomem *base = NULL;
+	uint32_t val = 0x00;
+	struct cci_device *cci_dev = NULL;
+	int queue = -1;
+
+	cci_dev = v4l2_get_subdevdata(sd);
+	if (!cci_dev || !c_ctrl) {
+		CAM_ERR(CAM_CCI,
+			"Failed: invalid params cci_dev:%pK, c_ctrl:%pK",
+			cci_dev, c_ctrl);
+		return -EINVAL;
+	}
+
+	soc_info = &cci_dev->soc_info;
+	base = soc_info->reg_map[0].mem_base;
+
+	val |= 1 << (CCI_GPIO_HALT_REQ_SHIFT +
+		c_ctrl->cci_info->acquired_gpio_queue);
+	cam_io_w_mb(val, base + CCI_HALT_REQ_ADDR);
+
+	if (c_ctrl->cci_info->acquired_gpio_queue >= 0) {
+		queue = c_ctrl->cci_info->acquired_gpio_queue;
+		mutex_lock(&cci_dev->init_mutex);
+		cci_dev->gpio_queue[queue].is_acquired = false;
+		c_ctrl->cci_info->acquired_gpio_queue = -1;
+		mutex_unlock(&cci_dev->init_mutex);
+		CAM_DBG(CAM_CCI, "GPIO queue %d released", queue);
+	}
+
+	return rc;
+}
+
+int cam_cci_fsync_core_cfg(struct v4l2_subdev *sd,
+	struct cam_cci_ctrl *cci_ctrl)
+{
+	int rc = 0;
+
+	switch (cci_ctrl->cmd) {
+	case MSM_CCI_TIMER_FSYNC_INDEPENDENT:
+		/*
+		 * Load the GPIO queue from the cmd_buf passed via cci_client,
+		 * start it, then release the queue immediately (transient
+		 * ownership — the queue is held only for this trigger cycle).
+		 */
+		rc = cam_cci_load_gpio_queue(sd, cci_ctrl,
+			&cci_ctrl->cci_info->cmd_buf);
+		if (rc) {
+			CAM_ERR(CAM_CCI, "GPIO queue load failed: %d", rc);
+			break;
+		}
+		rc = __cci_gpio_queue_start(sd, cci_ctrl);
+		if (rc)
+			CAM_ERR(CAM_CCI, "GPIO queue start failed: %d", rc);
+		__cci_halt_gpio_queue(sd, cci_ctrl);
+		break;
+	case MSM_CCI_GPIO_QUEUE_HALT:
+		CAM_DBG(CAM_CCI, "MSM_CCI_GPIO_QUEUE_HALT");
+		rc = __cci_halt_gpio_queue(sd, cci_ctrl);
+		break;
+	case MSM_CCI_GPIO_QUEUE_START:
+		CAM_DBG(CAM_CCI, "MSM_CCI_GPIO_QUEUE_START");
+		rc = __cci_gpio_queue_start(sd, cci_ctrl);
+		break;
+	default:
+		rc = -ENOIOCTLCMD;
+		break;
+	}
+
+	return rc;
+}
+
+static int __cci_init_gpio_queue(struct cci_device *cci_dev)
+{
+	int rc = 0;
+	int i = 0;
+
+	for (i = 0; i < GPIO_Q_MAX; i++) {
+		mutex_init(&(cci_dev->gpio_queue[i].gpio_q_mutex));
+		cci_dev->gpio_queue[i].fps = 0;
+		cci_dev->gpio_queue[i].is_acquired = false;
+	}
+
+	return rc;
 }
 
 static long cam_cci_subdev_ioctl(struct v4l2_subdev *sd,
@@ -795,6 +1186,7 @@ static int cam_cci_component_bind(struct device *dev,
 	mutex_init(&(new_cci_dev->init_mutex));
 	CAM_DBG(CAM_CCI, "Device Type :%d", soc_info->index);
 
+	__cci_init_gpio_queue(new_cci_dev);
 	cpas_parms.cam_cpas_client_cb = NULL;
 	cpas_parms.cell_index = soc_info->index;
 	cpas_parms.dev = &pdev->dev;
@@ -934,3 +1326,241 @@ void cam_cci_exit_module(void)
 
 MODULE_DESCRIPTION("MSM CCI driver");
 MODULE_LICENSE("GPL v2");
+
+static const char *cam_cci_gpio_cmd_type_str(enum cam_cci_gpio_cmd_type cmd)
+{
+	switch (cmd) {
+	case CCI_GPIO_SET_PARAM_CMD:                return "SET_PARAM";
+	case CCI_GPIO_WAIT_CMD:                     return "WAIT";
+	case CCI_GPIO_WAIT_SYNC_CMD:                return "WAIT_SYNC";
+	case CCI_GPIO_WAIT_GPIO_IN_EVENT_CMD:       return "WAIT_GPIO_IN_EVENT";
+	case CCI_GPIO_WAIT_I2C_Q_TRIG_EVENT_CMD:    return "WAIT_I2C_Q_TRIG_EVENT";
+	case CCI_GPIO_OUT_CMD:                      return "OUT";
+	case CCI_GPIO_TRIG_EVENT_CMD:               return "TRIG_EVENT";
+	case CCI_GPIO_REPORT_CMD:                   return "REPORT";
+	case CCI_GPIO_REPEAT_CMD:                   return "REPEAT";
+	case CCI_GPIO_CONTINUE_CMD:                 return "CONTINUE";
+	case CCI_GPIO_INVALID_CMD:                  return "INVALID";
+	default:                                    return "UNKNOWN";
+	}
+}
+
+static int cam_cci_prepare_delay_chain(struct cam_cci_gpio_cmd_buf *gpio_cmds,
+	uint32_t delay, uint32_t max, enum cam_cci_gpio_cmd_type op)
+{
+	int loop = delay / max;
+
+	while (loop > 0) {
+		if (gpio_cmds->cmd_count >= CCI_MAX_GPIO_QUEUE_SIZE) {
+			CAM_ERR(CAM_CCI, "GPIO cmd buffer overflow in delay chain");
+			return -EOVERFLOW;
+		}
+		gpio_cmds->buf[gpio_cmds->cmd_count] = max << 4 | op;
+		gpio_cmds->cmd_count++;
+		delay -= max;
+		--loop;
+	}
+
+	if (delay > 0) {
+		if (gpio_cmds->cmd_count >= CCI_MAX_GPIO_QUEUE_SIZE) {
+			CAM_ERR(CAM_CCI, "GPIO cmd buffer overflow in delay chain");
+			return -EOVERFLOW;
+		}
+		gpio_cmds->buf[gpio_cmds->cmd_count] = delay << 4 | op;
+		gpio_cmds->cmd_count++;
+	}
+
+	return 0;
+}
+
+int cam_cci_fill_gpio_cmd_buffer(struct cam_cci_gpio_cmd_buf *gpio_cmds,
+	int op, uint32_t val)
+{
+	uint32_t delay = 0;
+	int rc = 0;
+
+	if (gpio_cmds->cmd_count >= CCI_MAX_GPIO_QUEUE_SIZE)
+		return -EOVERFLOW;
+
+	CAM_DBG(CAM_CCI, "Adding new gpio cmd %s val %u",
+		cam_cci_gpio_cmd_type_str(op), val);
+
+	switch (op) {
+	case CCI_GPIO_SET_PARAM_CMD:
+		/* val is sensor number to which WAIT_SYNC cmd needs to be synchronized to */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_WAIT_CMD: {
+		/* val is wait count [31:4] */
+		delay = NSEC_TO_CCI_CLK_CYCLES(val);
+		CAM_DBG(CAM_CCI, "val %u delay %u", val, delay);
+		if (delay > CCI_GPIO_MAX_DELAY_28BIT_TIMER) {
+			rc = cam_cci_prepare_delay_chain(gpio_cmds, delay,
+				CCI_GPIO_MAX_DELAY_28BIT_TIMER, op);
+			if (rc < 0)
+				return rc;
+		} else {
+			gpio_cmds->buf[gpio_cmds->cmd_count] = delay << 4 | op;
+			gpio_cmds->cmd_count++;
+		}
+		break;
+	}
+	case CCI_GPIO_WAIT_SYNC_CMD: {
+		/* val is wait count [31:18] Line number to be in sync with[17:4] */
+		delay = NSEC_TO_CCI_CLK_CYCLES(val);
+		CAM_DBG(CAM_CCI, "val %u delay %u", val, delay);
+		if (delay > CCI_GPIO_MAX_DELAY_14BIT_TIMER) {
+			rc = cam_cci_prepare_delay_chain(gpio_cmds, delay,
+				CCI_GPIO_MAX_DELAY_14BIT_TIMER, op);
+			if (rc < 0)
+				return rc;
+		} else {
+			gpio_cmds->buf[gpio_cmds->cmd_count] = delay << 3 | op;
+			gpio_cmds->cmd_count++;
+		}
+		break;
+	}
+	case CCI_GPIO_WAIT_GPIO_IN_EVENT_CMD:
+		/* val is TRIG_TYPE[9:8] GPIO_IN# [5:4] */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_WAIT_I2C_Q_TRIG_EVENT_CMD:
+		/* val is I2C Queue # [5:4] */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_OUT_CMD:
+		/* val is GPIO_VALUE[16:12] GPIO_WR_EN[8:4] */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_TRIG_EVENT_CMD:
+		/* this is always used with WAIT_GPIO_EVENT from I2C queue cmd set
+		 * val is 0 */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_REPORT_CMD:
+		/* val is Capture Report Data [9] IRQ_EN[8] REPORT_ID[7:4] */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_REPEAT_CMD:
+		/* val is REPEAT COUNT [9:4] */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	case CCI_GPIO_CONTINUE_CMD:
+		/* specifies the end of repeat loop. This should be the last cmd in a queue
+		 * val is 0 */
+		gpio_cmds->buf[gpio_cmds->cmd_count] = val << 4 | op;
+		gpio_cmds->cmd_count++;
+		break;
+	default:
+		CAM_ERR(CAM_CCI, "Unsupported GPIO Queue operation %s:%d",
+			cam_cci_gpio_cmd_type_str(op), op);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int cam_cci_timing_schema_to_cmd_buf(struct cci_gpio_timing_schema *schema,
+	struct cam_cci_gpio_cmd_buf *cmd_buf)
+{
+	uint8_t gpio_w_en = 0;
+	uint16_t gpio_val = 0;
+	bool pending_gpio_out_cmd = false;
+	int32_t gpio_idx = -1;
+	size_t i;
+	int rc;
+
+	if (!schema || !cmd_buf) {
+		CAM_ERR(CAM_CCI, "Invalid params schema=%pK cmd_buf=%pK",
+			schema, cmd_buf);
+		return -EINVAL;
+	}
+
+	if (schema->event_count == 0 ||
+	    schema->event_count > CAM_CCI_TIMER_MAX_EVENTS) {
+		CAM_ERR(CAM_CCI, "Invalid event_count=%u (valid: 1..%d)",
+			schema->event_count, CAM_CCI_TIMER_MAX_EVENTS);
+		return -EINVAL;
+	}
+
+	/* Initialize cmd_buf - prevents helper from resetting it */
+	cmd_buf->cmd_count = 0;
+	cmd_buf->cmd_buf_ready = false;
+	memset(&cmd_buf->buf, 0, sizeof(cmd_buf->buf));
+
+	/* Convert events using the comprehensive helper */
+	for (i = 0; i < schema->event_count; i++) {
+		/* Handle delay */
+		if (schema->events[i].delay_to_trigger_ns) {
+			if (pending_gpio_out_cmd) {
+				/* Flush pending OUT command using helper */
+				rc = cam_cci_fill_gpio_cmd_buffer(
+					cmd_buf,
+					CCI_GPIO_OUT_CMD,
+					(gpio_val << 8) | gpio_w_en);
+				if (rc < 0) {
+					CAM_ERR(CAM_CCI,
+						"Failed to add OUT cmd: %d", rc);
+					return rc;
+				}
+				pending_gpio_out_cmd = false;
+			}
+			gpio_w_en = 0;
+			gpio_val = 0;
+
+			/* Add WAIT command using helper - handles delay chaining */
+			rc = cam_cci_fill_gpio_cmd_buffer(
+				cmd_buf,
+				CCI_GPIO_WAIT_CMD,
+				schema->events[i].delay_to_trigger_ns);
+			if (rc < 0) {
+				CAM_ERR(CAM_CCI,
+					"Failed to add WAIT cmd: %d", rc);
+				return rc;
+			}
+		}
+
+		/* Get GPIO index */
+		gpio_idx = cam_sensor_util_get_gpio_index(schema->events[i].gpio_number);
+		if (gpio_idx < 0) {
+			CAM_ERR(CAM_CCI, "Invalid GPIO number %lld",
+				schema->events[i].gpio_number);
+			return -EINVAL;
+		}
+
+		/* Build GPIO command */
+		gpio_w_en |= 1 << gpio_idx;
+		if (schema->events[i].level)
+			gpio_val |= BIT(gpio_idx);
+		else
+			gpio_val &= ~BIT(gpio_idx);
+		pending_gpio_out_cmd = true;
+	}
+
+	/* Flush final OUT command using helper */
+	if (pending_gpio_out_cmd) {
+		rc = cam_cci_fill_gpio_cmd_buffer(
+			cmd_buf,
+			CCI_GPIO_OUT_CMD,
+			(gpio_val << 8) | gpio_w_en);
+		if (rc < 0) {
+			CAM_ERR(CAM_CCI,
+				"Failed to add final OUT cmd: %d", rc);
+			return rc;
+		}
+	}
+
+	cmd_buf->cmd_buf_ready = true;
+
+	CAM_DBG(CAM_CCI, "Converted timing schema to cmd_buf: %d commands",
+		cmd_buf->cmd_count);
+
+	return 0;
+}

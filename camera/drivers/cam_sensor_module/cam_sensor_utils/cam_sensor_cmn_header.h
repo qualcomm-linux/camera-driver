@@ -22,6 +22,19 @@
 #include <media/cam_sensor.h>
 #include <media/cam_req_mgr.h>
 
+/* CCI timer indices */
+#define CCI_TIMER0           0
+#define CCI_TIMER1           1
+#define CCI_TIMER2           2
+#define CCI_TIMER3           3
+#define CCI_TIMER4           4
+#define CCI_TIMER5           5
+#define CCI_TIMER6           6
+#define CCI_TIMER7           7
+#define CCI_TIMER8           8
+#define CCI_TIMER9           9
+#define CCI_TIMER_MAX        10
+
 #define MAX_POWER_CONFIG                       12
 #define MAX_PER_FRAME_ARRAY                    32
 #define BATCH_SIZE_MAX                         16
@@ -113,6 +126,16 @@ enum msm_camera_power_seq_type {
 	SENSOR_CUSTOM_GPIO1,
 	SENSOR_CUSTOM_GPIO2,
 	SENSOR_VANA1,
+	SENSOR_CCI_TIMER_0,
+	SENSOR_CCI_TIMER_1,
+	SENSOR_CCI_TIMER_2,
+	SENSOR_CCI_TIMER_3,
+	SENSOR_CCI_TIMER_4,
+	SENSOR_CCI_TIMER_5,
+	SENSOR_CCI_TIMER_6,
+	SENSOR_CCI_TIMER_7,
+	SENSOR_CCI_TIMER_8,
+	SENSOR_CCI_TIMER_9,
 	SENSOR_SEQ_TYPE_MAX,
 };
 

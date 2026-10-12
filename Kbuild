@@ -613,6 +613,7 @@ camera_$(CAMERA_ARCH)-$(CONFIG_SPECTRA_SENSOR) += \
 	camera/drivers/cam_sensor_module/cam_ois/cam_ois_soc.o \
 	camera/drivers/cam_sensor_module/cam_sensor/cam_sensor_dev.o \
 	camera/drivers/cam_sensor_module/cam_sensor/cam_sensor_core.o \
+	camera/drivers/cam_sensor_module/cam_sensor/cam_sensor_fsync.o \
 	camera/drivers/cam_sensor_module/cam_sensor/cam_sensor_soc.o \
 	camera/drivers/cam_sensor_module/cam_sensor_io/cam_sensor_io.o \
 	camera/drivers/cam_sensor_module/cam_sensor_io/cam_sensor_cci_i2c.o \
