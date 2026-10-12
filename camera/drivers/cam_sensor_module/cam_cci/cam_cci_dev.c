@@ -16,6 +16,7 @@
 
 #define CCI_MAX_DELAY 1000000
 #define QUEUE_SIZE 100
+#define CCI_CPAS_GPIO_MUX1_SHIFT 10
 
 struct cci_irq_data {
 	int32_t  is_valid;
@@ -130,88 +131,143 @@ static int __cci_configure_cpas(struct cci_device *cci_dev,
 	 */
 	cci_timer_index = -1;
 
-	if (cmd_type == MSM_CCI_TIMER_FSYNC_ALL ||
+	if (cmd_type == MSM_CCI_TIMER_FSYNC_INFINITE ||
 	    cmd_type == MSM_CCI_TIMER_FSYNC_INDEPENDENT) {
 		switch (cci_index) {
 		case 0:
+			/*
+			* CCI_0: assert MUX_EN[4:0] to select CCI_0 over CCI_1
+			*
+			* GPIO bits 0-4 (cci_timer_index <= CCI_TIMER4):
+			*   MUX1_EN[4:0] = 1 → route MUX_EN[4:0] path → CCI_0
+			*   e.g. Timer2 → GPIO bit 2: reg = 0x000FFFFF
+			*
+			* GPIO bits 5-9 (cci_timer_index > CCI_TIMER4):
+			*   MUX1_EN[9:5] = 0 → route MUX_EN[4:0] path → CCI_0
+			*   e.g. Timer7 → GPIO bit 7: reg = 0x000DFFFF
+			*/
 			CAM_INFO(CAM_CCI,
 				"cci: %d is about to enable all cci timers",
 				cci_index);
+
+			/* MUX_EN[4:0] = 1 → select CCI_0 */
 			top_mux = BIT(CCI_TIMER0) | BIT(CCI_TIMER1) |
-				BIT(CCI_TIMER2) | BIT(CCI_TIMER3) |
-				BIT(CCI_TIMER4);
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = BIT(CCI_TIMER0) |
-					BIT(CCI_TIMER1) | BIT(CCI_TIMER2) |
-					BIT(CCI_TIMER3) | BIT(CCI_TIMER4);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+					BIT(CCI_TIMER2) | BIT(CCI_TIMER3) |
+					BIT(CCI_TIMER4);
+
+			if (cci_timer_index <= CCI_TIMER4) {
+				/* MUX1_EN[4:0] = 1 → enable MUX_EN[4:0] path for GPIO bits 0-4 */
+				second_level_mux = BIT(CCI_TIMER0) | BIT(CCI_TIMER1) |
+								BIT(CCI_TIMER2) | BIT(CCI_TIMER3) |
+								BIT(CCI_TIMER4);
 			} else {
+				/* MUX1_EN[9:5] = 0 → enable MUX_EN[4:0] path for GPIO bits 5-9 */
 				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9;
 			}
+			second_level_mux <<= CCI_CPAS_GPIO_MUX1_SHIFT;
 			cpas_mux_val = top_mux | second_level_mux;
 			break;
-		case 2:
-			CAM_INFO(CAM_CCI,
-				"cci: %d is about to enable all cci timers",
-				cci_index);
-			top_mux = BIT(CCI_TIMER5) | BIT(CCI_TIMER6) |
-				BIT(CCI_TIMER7) | BIT(CCI_TIMER8) |
-				BIT(CCI_TIMER9);
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			} else {
-				second_level_mux = BIT(CCI_TIMER5) |
-					BIT(CCI_TIMER6) | BIT(CCI_TIMER7) |
-					BIT(CCI_TIMER8) | BIT(CCI_TIMER9);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
-			}
-			cpas_mux_val = top_mux | second_level_mux;
-			break;
+
 		case 1:
+			/*
+			* CCI_1: clear MUX_EN[4:0] to select CCI_1 over CCI_0
+			*
+			* GPIO bits 0-4 (cci_timer_index <= CCI_TIMER4):
+			*   MUX1_EN[4:0] = 1 → route MUX_EN[4:0]=0 path → CCI_1
+			*   e.g. Timer2 → GPIO bit 2: reg = 0x000FFFFB
+			*
+			* GPIO bits 5-9 (cci_timer_index > CCI_TIMER4):
+			*   MUX1_EN[9:5] = 0 → route MUX_EN[4:0]=0 path → CCI_1
+			*   e.g. Timer7 → GPIO bit 7: reg = 0x000DFFFB
+			*/
 			CAM_INFO(CAM_CCI,
 				"cci: %d is about to enable all cci timers",
 				cci_index);
+
+			/* MUX_EN[4:0] = 0 → select CCI_1 */
 			top_mux = 0x00;
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
-				second_level_mux = BIT(CCI_TIMER0) |
-					BIT(CCI_TIMER1) | BIT(CCI_TIMER2) |
-					BIT(CCI_TIMER3) | BIT(CCI_TIMER4);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+
+			if (cci_timer_index <= CCI_TIMER4) {
+				/* MUX1_EN[4:0] = 1 → enable MUX_EN[4:0] path for GPIO bits 0-4 */
+				second_level_mux = BIT(CCI_TIMER0) | BIT(CCI_TIMER1) |
+								BIT(CCI_TIMER2) | BIT(CCI_TIMER3) |
+								BIT(CCI_TIMER4);
 			} else {
+				/* MUX1_EN[9:5] = 0 → enable MUX_EN[4:0] path for GPIO bits 5-9 */
 				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9;
 			}
+			second_level_mux <<= CCI_CPAS_GPIO_MUX1_SHIFT;
 			cpas_mux_val = top_mux | second_level_mux;
 			break;
+
+		case 2:
+			/*
+			* CCI_2: assert MUX_EN[9:5] to select CCI_2 over CCI_3
+			*
+			* GPIO bits 0-4 (cci_timer_index <= CCI_TIMER4):
+			*   MUX1_EN[4:0] = 0 → route MUX_EN[9:5] path → CCI_2
+			*   e.g. Timer2 → GPIO bit 2: reg = 0x000FEFFF  ⬅ your target
+			*
+			* GPIO bits 5-9 (cci_timer_index > CCI_TIMER4):
+			*   MUX1_EN[9:5] = 1 → route MUX_EN[9:5] path → CCI_2
+			*   e.g. Timer7 → GPIO bit 7: reg = 0x000FFFFF
+			*/
+			CAM_INFO(CAM_CCI,
+				"cci: %d is about to enable all cci timers",
+				cci_index);
+
+			/* MUX_EN[9:5] = 1 → select CCI_2 */
+			top_mux = BIT(CCI_TIMER5) | BIT(CCI_TIMER6) |
+					BIT(CCI_TIMER7) | BIT(CCI_TIMER8) |
+					BIT(CCI_TIMER9);
+
+			if (cci_timer_index <= CCI_TIMER4) {
+				/* MUX1_EN[4:0] = 0 → enable MUX_EN[9:5] path for GPIO bits 0-4 */
+				second_level_mux = 0x00;
+			} else {
+				/* MUX1_EN[9:5] = 1 → enable MUX_EN[9:5] path for GPIO bits 5-9 */
+				second_level_mux = BIT(CCI_TIMER5) | BIT(CCI_TIMER6) |
+								BIT(CCI_TIMER7) | BIT(CCI_TIMER8) |
+								BIT(CCI_TIMER9);
+			}
+			second_level_mux <<= CCI_CPAS_GPIO_MUX1_SHIFT;
+			cpas_mux_val = top_mux | second_level_mux;
+			break;
+
 		case 3:
+			/*
+			* CCI_3: clear MUX_EN[9:5] to select CCI_3 over CCI_2
+			*
+			* GPIO bits 0-4 (cci_timer_index <= CCI_TIMER4):
+			*   MUX1_EN[4:0] = 0 → route MUX_EN[9:5]=0 path → CCI_3
+			*   e.g. Timer2 → GPIO bit 2: reg = 0x000FEF7F
+			*
+			* GPIO bits 5-9 (cci_timer_index > CCI_TIMER4):
+			*   MUX1_EN[9:5] = 1 → route MUX_EN[9:5]=0 path → CCI_3
+			*   e.g. Timer7 → GPIO bit 7: reg = 0x000FFF7F
+			*/
 			CAM_INFO(CAM_CCI,
 				"cci: %d is about to enable all cci timers",
 				cci_index);
+
+			/* MUX_EN[9:5] = 0 → select CCI_3 */
 			top_mux = 0x00;
-			if (cci_timer_index / 2 <= CCI_TIMER_MAX) {
+
+			if (cci_timer_index <= CCI_TIMER4) {
+				/* MUX1_EN[4:0] = 0 → enable MUX_EN[9:5] path for GPIO bits 0-4 */
 				second_level_mux = 0x00;
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
 			} else {
-				second_level_mux = BIT(CCI_TIMER5) |
-					BIT(CCI_TIMER6) | BIT(CCI_TIMER7) |
-					BIT(CCI_TIMER8) | BIT(CCI_TIMER9);
-				second_level_mux <<=
-					CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4;
+				/* MUX1_EN[9:5] = 1 → enable MUX_EN[9:5] path for GPIO bits 5-9 */
+				second_level_mux = BIT(CCI_TIMER5) | BIT(CCI_TIMER6) |
+								BIT(CCI_TIMER7) | BIT(CCI_TIMER8) |
+								BIT(CCI_TIMER9);
 			}
+			second_level_mux <<= CCI_CPAS_GPIO_MUX1_SHIFT;
 			cpas_mux_val = top_mux | second_level_mux;
 			break;
+
 		default:
-			CAM_ERR(CAM_CCI, "cci_index is not valid: %d",
-				cci_index);
+			CAM_ERR(CAM_CCI, "cci_index is not valid: %d", cci_index);
 			return -EINVAL;
 		}
 	}
@@ -462,7 +518,26 @@ int cam_cci_fsync_core_cfg(struct v4l2_subdev *sd,
 		rc = __cci_gpio_queue_start(sd, cci_ctrl);
 		if (rc)
 			CAM_ERR(CAM_CCI, "GPIO queue start failed: %d", rc);
+
 		__cci_halt_gpio_queue(sd, cci_ctrl);
+		break;
+	case MSM_CCI_TIMER_FSYNC_INFINITE:
+		/*
+		 * Load the GPIO queue from the cmd_buf passed via cci_client,
+		 * start it, then release the queue immediately (transient
+		 * ownership — the queue is held only for this trigger cycle).
+		 */
+		rc = cam_cci_load_gpio_queue(sd, cci_ctrl,
+			&cci_ctrl->cci_info->cmd_buf);
+		if (rc) {
+			CAM_ERR(CAM_CCI, "GPIO queue load failed: %d", rc);
+			break;
+		}
+		rc = __cci_gpio_queue_start(sd, cci_ctrl);
+		if (rc) {
+			CAM_ERR(CAM_CCI, "GPIO queue start failed: %d", rc);
+			__cci_halt_gpio_queue(sd, cci_ctrl);
+		}
 		break;
 	case MSM_CCI_GPIO_QUEUE_HALT:
 		CAM_DBG(CAM_CCI, "MSM_CCI_GPIO_QUEUE_HALT");
@@ -1372,9 +1447,9 @@ static const char *cam_cci_gpio_cmd_type_str(enum cam_cci_gpio_cmd_type cmd)
 }
 
 static int cam_cci_prepare_delay_chain(struct cam_cci_gpio_cmd_buf *gpio_cmds,
-	uint32_t delay, uint32_t max, enum cam_cci_gpio_cmd_type op)
+	uint64_t delay, uint32_t max, enum cam_cci_gpio_cmd_type op)
 {
-	int loop = delay / max;
+	uint64_t loop = delay / max;
 
 	while (loop > 0) {
 		if (gpio_cmds->cmd_count >= CCI_MAX_GPIO_QUEUE_SIZE) {
@@ -1402,7 +1477,7 @@ static int cam_cci_prepare_delay_chain(struct cam_cci_gpio_cmd_buf *gpio_cmds,
 int cam_cci_fill_gpio_cmd_buffer(struct cam_cci_gpio_cmd_buf *gpio_cmds,
 	int op, uint32_t val)
 {
-	uint32_t delay = 0;
+	uint64_t delay = 0;
 	int rc = 0;
 
 	if (gpio_cmds->cmd_count >= CCI_MAX_GPIO_QUEUE_SIZE)
@@ -1419,8 +1494,8 @@ int cam_cci_fill_gpio_cmd_buffer(struct cam_cci_gpio_cmd_buf *gpio_cmds,
 		break;
 	case CCI_GPIO_WAIT_CMD: {
 		/* val is wait count [31:4] */
-		delay = NSEC_TO_CCI_CLK_CYCLES(val);
-		CAM_DBG(CAM_CCI, "val %u delay %u", val, delay);
+		delay = NSEC_TO_CCI_CLK_CYCLES((uint64_t)val * 1000);
+		CAM_DBG(CAM_CCI, "val %llu delay %llu", val, delay);
 		if (delay > CCI_GPIO_MAX_DELAY_28BIT_TIMER) {
 			rc = cam_cci_prepare_delay_chain(gpio_cmds, delay,
 				CCI_GPIO_MAX_DELAY_28BIT_TIMER, op);
@@ -1435,7 +1510,7 @@ int cam_cci_fill_gpio_cmd_buffer(struct cam_cci_gpio_cmd_buf *gpio_cmds,
 	case CCI_GPIO_WAIT_SYNC_CMD: {
 		/* val is wait count [31:18] Line number to be in sync with[17:4] */
 		delay = NSEC_TO_CCI_CLK_CYCLES(val);
-		CAM_DBG(CAM_CCI, "val %u delay %u", val, delay);
+		CAM_DBG(CAM_CCI, "val %llu delay %llu", val, delay);
 		if (delay > CCI_GPIO_MAX_DELAY_14BIT_TIMER) {
 			rc = cam_cci_prepare_delay_chain(gpio_cmds, delay,
 				CCI_GPIO_MAX_DELAY_14BIT_TIMER, op);

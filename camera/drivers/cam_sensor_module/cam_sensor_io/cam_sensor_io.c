@@ -7,6 +7,7 @@
 #include "cam_sensor_io.h"
 #include "cam_sensor_i2c.h"
 #include "cam_sensor_i3c.h"
+
 #include <linux/pm_runtime.h>
 
 int32_t camera_io_dev_poll(struct camera_io_master *io_master_info,
@@ -309,7 +310,8 @@ int32_t camera_io_release(struct camera_io_master *io_master_info)
 	return -EINVAL;
 }
 
-int32_t camera_io_gpio_cfg(struct camera_io_master *io_master_info)
+int32_t camera_io_gpio_cfg(struct camera_io_master *io_master_info,
+	enum cam_cci_cmd_type cmd_type)
 {
 	int rc = 0;
 
@@ -321,7 +323,7 @@ int32_t camera_io_gpio_cfg(struct camera_io_master *io_master_info)
 
 	switch (io_master_info->master_type) {
 	case CCI_MASTER:
-		rc = cam_sensor_cci_i2c_util(io_master_info, MSM_CCI_TIMER_FSYNC_ALL);
+		rc = cam_sensor_cci_i2c_util(io_master_info, cmd_type);
 		break;
 	case I2C_MASTER:
 	case I3C_MASTER:

@@ -56,6 +56,7 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
  *
  * Returns: 0 on success, negative error code on failure
  */
-int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl, int64_t req_id);
+int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl,
+		int64_t req_id, enum cam_cci_cmd_type cmd_opcode);
 
 #endif /* _CAM_SENSOR_FSYNC_H_ */
