@@ -7,6 +7,7 @@
 #include <linux/uaccess.h>
 #include "cam_sensor_fsync.h"
 #include "cam_sensor_dev.h"
+#include "cam_sensor_core.h"
 #include "cam_sensor_io.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
@@ -34,6 +35,17 @@ static int cam_sensor_fsync_validate_timer(struct cam_sensor_ctrl_t *s_ctrl,
 			freq_info->freq_mode, CCI_TIMER_FREQ_MODE_MAX - 1);
 		return -EINVAL;
 	}
+
+	/*
+	 * Store the trigger point / refcount for stage-based GPIO fsync.
+	 * Only infinite frequency mode uses stage-based triggering (no
+	 * per-frame request); it fires post ACQUIRE_DEV / START_DEV once
+	 * refcount_to_trigger sensors reach the stored trigger point.
+	 */
+	if (freq_info->freq_mode == CCI_TIMER_INFINITE_FRAME)
+		cam_sensor_fsync_trigger_set(
+			tpoint_info->tp.tpoint_fsync_info,
+			tpoint_info->refcount_to_trigger);
 
 	if (timer_info->event_count == 0 ||
 	    timer_info->event_count > CAM_CCI_TIMER_MAX_EVENTS) {
@@ -172,8 +184,12 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 		 * populated here. Multi-queue support will be added as part
 		 * of the fsync object redesign.
 		 */
-		rc = cam_cci_timing_schema_to_cmd_buf(&fsync_cfg->timer_info,
-			&slot->cmd_buf[0]);
+		if (fsync_cfg->freq_info.freq_mode == CCI_TIMER_INFINITE_FRAME)
+			rc = cam_cci_build_infinite_mode_cmd_buf(
+				&fsync_cfg->timer_info, &slot->cmd_buf[0]);
+		else
+			rc = cam_cci_timing_schema_to_cmd_buf(&fsync_cfg->timer_info,
+				&slot->cmd_buf[0]);
 		if (rc < 0) {
 			CAM_ERR(CAM_SENSOR,
 				"Failed to convert timing schema: %d", rc);

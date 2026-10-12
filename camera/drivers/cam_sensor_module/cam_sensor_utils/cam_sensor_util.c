@@ -20,6 +20,19 @@
 #define VALIDATE_VOLTAGE(min, max, config_val) ((config_val) && \
 	(config_val >= min) && (config_val <= max))
 
+int cam_sensor_util_remap_timer_to_gpioq_mask(
+	enum msm_camera_power_seq_type seq_type)
+{
+	if (seq_type < SENSOR_CCI_TIMER_0 || seq_type > SENSOR_CCI_TIMER_9) {
+		CAM_ERR(CAM_SENSOR_UTIL,
+			"Invalid timer seq_type %d, expected range [%d, %d]",
+			seq_type, SENSOR_CCI_TIMER_0, SENSOR_CCI_TIMER_9);
+		return -EINVAL;
+	}
+
+	return seq_type - SENSOR_CCI_TIMER_0;
+}
+
 int cam_sensor_count_elems_i3c_device_id(struct device_node *dev,
 	int *num_entries, char *sensor_id_table_str)
 {
@@ -2938,23 +2951,6 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 	return 0;
 }
 
-/* Temporary gpio number to cci_timer map for test purposes */
-static const uint16_t gpio_map[MAX_GPIO_INDEX] = {
-	109, 110, 111, 163, 164
-};
-
-int cam_sensor_util_get_gpio_index(int64_t gpio_number)
-{
-	size_t i;
-
-	for (i = 0; i < MAX_GPIO_INDEX; i++) {
-		if (gpio_number == gpio_map[i])
-			return i;
-	}
-
-	return -EINVAL;
-}
-
 int cam_sensor_util_validate_pulse_durations(struct cci_gpio_timing_schema *schema,
 	uint64_t frame_time_us)
 {
@@ -2969,7 +2965,7 @@ int cam_sensor_util_validate_pulse_durations(struct cci_gpio_timing_schema *sche
 		schema->event_count, frame_time_us);
 
 	for (i = 0; i < schema->event_count; i++) {
-		int gpio_idx = cam_sensor_util_get_gpio_index(schema->events[i].gpio_number);
+		int gpio_idx = cam_sensor_util_remap_timer_to_gpioq_mask(schema->events[i].gpio_number);
 		uint32_t id;
 
 		if (gpio_idx < 0 || gpio_idx >= MAX_GPIO_INDEX) {
