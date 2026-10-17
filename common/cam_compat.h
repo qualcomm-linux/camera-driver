@@ -173,6 +173,33 @@ static inline int cam_gpio_request_one(unsigned int gpio,
 	return rc;
 }
 
+/*
+ * gpio_set_value_cansleep() (the legacy integer-GPIO setter) was removed
+ * in kernel 7.3. Provide cam_gpio_set_value_cansleep(gpio, value) as a
+ * drop-in replacement that works on both old and new kernels:
+ *
+ *   kernel < 7.3 : delegates directly to gpio_set_value_cansleep()
+ *   kernel >= 7.3: converts to a descriptor and calls
+ *                  gpiod_set_raw_value_cansleep(), which ignores the DT
+ *                  active-low polarity exactly like the removed legacy
+ *                  wrapper used to.
+ */
+static inline void cam_gpio_set_value_cansleep(unsigned int gpio, int value)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	struct gpio_desc *desc = gpio_to_desc(gpio);
+
+	if (!desc) {
+		CAM_WARN(CAM_UTIL, "invalid gpio %u, desc lookup failed", gpio);
+		return;
+	}
+
+	gpiod_set_raw_value_cansleep(desc, value);
+#else
+	gpio_set_value_cansleep(gpio, value);
+#endif
+}
+
 #ifdef CONFIG_DOMAIN_ID_SECURE_CAMERA
 #include <linux/IClientEnv.h>
 #include <linux/ITrustedCameraDriver.h>
