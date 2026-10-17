@@ -23,6 +23,7 @@
 #include "cam_subdev.h"
 #include "cam_tasklet_util.h"
 #include "cam_common_util.h"
+#include "cam_csiphy_core.h"
 
 /* Timeout value in msec */
 #define IFE_CSID_TIMEOUT                               1000
@@ -3577,6 +3578,49 @@ static int cam_ife_csid_get_time_stamp(
 	return 0;
 }
 
+/*
+ * Relay the CSI2 RX status and counters to CSIPHY for the csiphy_qmargin
+ * read-out (CDR sweep). csi2_rx_val is the RX IRQ status of a fatal error,
+ * or 0 on stop, where the live RX IRQ status register is read instead.
+ */
+static void cam_ife_csid_send_cdr_sweep_csi2_rx_vals(
+	struct cam_ife_csid_hw *csid_hw, uint32_t csi2_rx_val)
+{
+	struct cam_hw_soc_info                          *soc_info;
+	const struct cam_ife_csid_csi2_rx_reg_offset    *csi2_reg;
+	struct csiphy_qmargin_csid_output                qmargin_csid_info = {0};
+	void __iomem                                    *mem_base;
+
+	if (!(csid_hw->csid_debug & CSID_DEBUG_ENABLE_CDR_SWEEP))
+		return;
+
+	if (csid_hw->res_type == CAM_ISP_IFE_IN_RES_TPG)
+		return;
+
+	soc_info = &csid_hw->hw_info->soc_info;
+	csi2_reg = csid_hw->csid_info->csid_reg->csi2_reg;
+	mem_base = soc_info->reg_map[0].mem_base;
+
+	qmargin_csid_info.csi2_rx_status = csi2_rx_val ? csi2_rx_val :
+		cam_io_r_mb(mem_base + csi2_reg->csid_csi2_rx_irq_status_addr);
+	qmargin_csid_info.csi2_total_crc_err =
+		cam_io_r_mb(mem_base + csi2_reg->csid_csi2_rx_total_crc_err_addr);
+	qmargin_csid_info.csi2_total_pkts_rcvd =
+		cam_io_r_mb(mem_base + csi2_reg->csid_csi2_rx_total_pkts_rcvd_addr);
+	qmargin_csid_info.csi2_err_seen = (csi2_rx_val != 0);
+
+	CAM_DBG(CAM_ISP, "CSID:%d PHY:%d CDR sweep rx: 0x%x crc: 0x%x pkts: 0x%x err: %d",
+		csid_hw->hw_intf->hw_idx, csid_hw->csi2_rx_cfg.phy_sel,
+		qmargin_csid_info.csi2_rx_status,
+		qmargin_csid_info.csi2_total_crc_err,
+		qmargin_csid_info.csi2_total_pkts_rcvd,
+		qmargin_csid_info.csi2_err_seen);
+
+	/* phy_sel is the 0-based CSIPHY index */
+	cam_csiphy_update_qmargin_csid_vals(csid_hw->csi2_rx_cfg.phy_sel,
+		&qmargin_csid_info);
+}
+
 static int cam_ife_csid_set_csid_debug(struct cam_ife_csid_hw   *csid_hw,
 	void *cmd_args)
 {
@@ -4208,6 +4252,9 @@ static int cam_ife_csid_stop(void *hw_priv,
 		csid_hw->hw_intf->hw_idx,
 		csid_stop->num_res);
 
+	/* Report the CSI2 RX status of the stream being stopped to CSIPHY */
+	cam_ife_csid_send_cdr_sweep_csi2_rx_vals(csid_hw, 0);
+
 	spin_lock_irqsave(&csid_hw->lock_state, flags);
 	csid_hw->device_enabled = 0;
 	cam_ife_csid_csi2_irq_ctrl(csid_hw, false);
@@ -4823,6 +4870,10 @@ static int cam_csid_evt_bottom_half_handler(
 		cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
 				CAM_SUBDEV_MESSAGE_IRQ_ERR,
 				csid_hw->csi2_rx_cfg.phy_sel);
+
+		cam_ife_csid_send_cdr_sweep_csi2_rx_vals(csid_hw,
+			evt_payload->irq_status[CAM_IFE_CSID_IRQ_REG_RX]);
+
 		if (csid_hw->fatal_err_detected)
 			goto end;
 		csid_hw->fatal_err_detected = true;

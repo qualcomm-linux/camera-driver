@@ -49,10 +49,14 @@
 #define CSIPHY_2PH_REGS                  5
 #define CSIPHY_3PH_REGS                  6
 #define CSIPHY_SKEW_CAL                  7
+#define CSIPHY_QMARGIN_PGM_DELAY         8
 
 #define CSIPHY_MAX_INSTANCES_PER_PHY     3
 
+#define CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT  11
+
 #define CAM_CSIPHY_MAX_DPHY_LANES    4
+#define CAM_CSIPHY_MAX_DPHY_DL_CLK_LANES    (CAM_CSIPHY_MAX_DPHY_LANES + 1)
 #define CAM_CSIPHY_MAX_CPHY_LANES    3
 #define CAM_CSIPHY_MAX_CPHY_DPHY_COMBO_LN    3
 
@@ -141,6 +145,53 @@ struct csiphy_reg_t {
 	int32_t  reg_data;
 	int32_t  delay;
 	uint32_t csiphy_param_type;
+};
+
+/**
+ * struct csiphy_qmargin_csid_output
+ * @csi2_rx_status:       CSID csi2 rx IRQ status (SOT[7:4] / EOT[3:0] captured)
+ * @csi2_total_crc_err:   CSID csi2 rx total CRC error count
+ * @csi2_total_pkts_rcvd: CSID csi2 rx total packets received count
+ * @csi2_err_seen:        Whether a csi2 rx error has been latched
+ */
+struct csiphy_qmargin_csid_output {
+	uint32_t csi2_rx_status;
+	uint32_t csi2_total_crc_err;
+	uint32_t csi2_total_pkts_rcvd;
+	bool     csi2_err_seen;
+};
+
+/**
+ * struct csiphy_dphy_qmargin_config - Per-lane 2-phase (DPHY) qmargin config
+ *
+ * @regs            : Register definition (addr, data, delay, param_type)
+ * @lane_idx        : Lane index (0-3 for data lanes, 4 for clock lane)
+ * @is_2ph_clk_lane : 1 if this is a clock lane, 0 if data lane
+ * @is_lane_enable  : 1 if this lane is enabled/active
+ */
+struct csiphy_dphy_qmargin_config {
+	struct csiphy_reg_t regs;
+	uint32_t lane_idx;
+	bool     is_2ph_clk_lane;
+	bool     is_lane_enable;
+};
+
+/**
+ * struct csiphy_qmargin_sweep_data
+ * @qmargin_csid_output:        CSID-side status relayed for the last stream
+ * @csiphy_qmargin_output_regs: CSIPHY common status registers read at stop
+ * @pgm_delay:                  Captured PGM delay defaults (data lanes 0-3, clock lane 4)
+ * @bw:                         Data rate of the last configured stream
+ * @is_combo_mode:              Whether the PHY is in DPHY combo mode
+ * @lane_cnt:                   Number of data lanes of the last configured stream
+ */
+struct csiphy_qmargin_sweep_data {
+	struct csiphy_qmargin_csid_output qmargin_csid_output;
+	uint32_t csiphy_qmargin_output_regs[CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT];
+	struct csiphy_dphy_qmargin_config pgm_delay[CAM_CSIPHY_MAX_DPHY_DL_CLK_LANES];
+	uint64_t bw;
+	uint32_t is_combo_mode;
+	uint8_t  lane_cnt;
 };
 
 struct csiphy_device;
@@ -302,6 +353,7 @@ struct csiphy_device {
 	struct cam_req_mgr_kmd_ops     ops;
 	struct cam_req_mgr_crm_cb     *crm_cb;
 	bool                           enable_irq_dump;
+	struct csiphy_qmargin_sweep_data qmargin_data;
 };
 
 /**
