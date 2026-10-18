@@ -6949,7 +6949,7 @@ static int cam_ife_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	cdm_acquire.handle = 0;
 	cdm_acquire.userdata = ife_mgr_ctx;
 	cdm_acquire.base_array_cnt = CAM_IFE_HW_NUM_MAX;
-	for (i = 0, j = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+	for (i = 0, j = 0; i < CAM_IFE_HW_NUM_MAX && j < CAM_SOC_MAX_BLOCK; i++) {
 		if (ife_hw_mgr->cdm_reg_map[i])
 			cdm_acquire.base_array[j++] =
 				ife_hw_mgr->cdm_reg_map[i];
@@ -7293,7 +7293,7 @@ static int cam_ife_mgr_acquire_dev(void *hw_mgr_priv, void *acquire_hw_args)
 	cdm_acquire.handle = 0;
 	cdm_acquire.userdata = ife_mgr_ctx;
 	cdm_acquire.base_array_cnt = CAM_IFE_HW_NUM_MAX;
-	for (i = 0, j = 0; i < CAM_IFE_HW_NUM_MAX; i++) {
+	for (i = 0, j = 0; i < CAM_IFE_HW_NUM_MAX && j < CAM_SOC_MAX_BLOCK; i++) {
 		if (ife_hw_mgr->cdm_reg_map[i])
 			cdm_acquire.base_array[j++] =
 				ife_hw_mgr->cdm_reg_map[i];
