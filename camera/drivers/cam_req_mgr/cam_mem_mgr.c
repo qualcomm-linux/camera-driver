@@ -1012,6 +1012,9 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		}
 	}
 #else
+	if (tbl.force_cache_allocs && !(cam_flags & CAM_MEM_FLAG_PROTECTED_MODE))
+		cam_flags |= CAM_MEM_FLAG_CACHE;
+
 	CAM_DBG(CAM_MEM, "Using cmm_alloc_buffer for allocation, len=%zu, flags=0x%x", len, cam_flags);
 	*buf = cmm_alloc_buffer(len, cam_flags);
 	if (IS_ERR_OR_NULL(*buf)) {
