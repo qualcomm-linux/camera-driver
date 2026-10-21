@@ -496,7 +496,7 @@ static int cam_mem_mgr_get_dma_heaps(void)
 	tbl.secure_display_heap = dma_heap_find("qcom,display");
 	if (IS_ERR_OR_NULL(tbl.secure_display_heap)) {
 		rc = PTR_ERR(tbl.secure_display_heap);
-		CAM_ERR(CAM_MEM, "qcom,display heap not found, rc=%d",
+		CAM_DBG(CAM_MEM, "qcom,display heap not found, rc=%d",
 			rc);
 		tbl.secure_display_heap = NULL;
 		goto put_heaps;
