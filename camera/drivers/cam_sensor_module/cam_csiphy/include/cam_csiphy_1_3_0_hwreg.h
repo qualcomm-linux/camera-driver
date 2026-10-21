@@ -8,6 +8,13 @@
 
 #include "../cam_csiphy_dev.h"
 
+struct cam_csiphy_aon_sel_params_t aon_cam_select_params_1_3_0 = {
+	.aon_cam_sel_offset[0] = 0x01E0,
+	.aon_cam_sel_offset[1] = 0x01E4,
+	.cam_sel_mask = BIT(0),
+	.mclk_sel_mask = BIT(8),
+};
+
 struct cam_cphy_dphy_status_reg_params_t status_regs_1_3_0 = {
 	.csiphy_3ph_status0_offset = 0x01E0,
 	.csiphy_2ph_status0_offset = 0x0090,
@@ -481,7 +488,7 @@ struct csiphy_reg_parms_t csiphy_v1_3_0 = {
 	.csiphy_2ph_3ph_config_array_size = 0,
 	.csiphy_interrupt_status_size = ARRAY_SIZE(csiphy_irq_reg_1_3_0),
 	.csiphy_num_common_status_regs = 20,
-	.aon_sel_params = NULL,
+	.aon_sel_params = &aon_cam_select_params_1_3_0,
 };
 
 struct csiphy_ctrl_t ctrl_reg_1_3_0 = {
