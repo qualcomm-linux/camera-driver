@@ -21,11 +21,12 @@ SRC := $(shell pwd)
 modules: cam_generated_h
 
 modules_install:
-	@$(foreach arch, $(SUPPORTED_ARCH), \
-		echo "Target: $(arch)"; \
-		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules $(KBUILD_OPTIONS) CAMERA_ARCH=$(arch); \
-		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules_install $(KBUILD_OPTIONS) CAMERA_ARCH=$(arch); \
-	)
+	@set -e; \
+	for arch in $(SUPPORTED_ARCH); do \
+		echo "Target: $$arch"; \
+		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules $(KBUILD_OPTIONS) CAMERA_ARCH=$$arch; \
+		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules_install $(KBUILD_OPTIONS) CAMERA_ARCH=$$arch; \
+	done
 headers_install:
 	echo "Processing target $@"
 	KERNEL_SCRIPT=$(KERNEL_SRC) IN_DIR=camera/include/uapi/camera/media/ OUT_DIR=sanitized_headers/camera/media bash scripts/sanitize_uapi.sh
@@ -33,7 +34,8 @@ headers_install:
 
 %:
 	echo "Processing glob target $@"
-	@$(foreach arch, $(SUPPORTED_ARCH), \
-		echo "Target: $(arch)"; \
-		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules $(KBUILD_OPTIONS) CAMERA_ARCH=$(arch); \
-	)
+	@set -e; \
+	for arch in $(SUPPORTED_ARCH); do \
+		echo "Target: $$arch"; \
+		$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules $(KBUILD_OPTIONS) CAMERA_ARCH=$$arch; \
+	done
