@@ -415,6 +415,7 @@ struct cam_ife_virtual_rdi_mapping {
  * @offline_sfe_clk         SFE Clock value to be configured for offline processing
  * @mapping_table:          mapping between virtual rdi and acquired rdi
  * @pri_rdi_out_res:        Primary RDI res for RDI only cases
+ * @commit_served_ctx_on_rup: Commit served ctx on RUP for HW without a real EPOCH
  */
 
 struct cam_ife_hw_concrete_ctx {
@@ -497,6 +498,7 @@ struct cam_ife_hw_concrete_ctx {
 	uint32_t                             offline_sfe_clk;
 	struct cam_ife_virtual_rdi_mapping   mapping_table;
 	uint32_t                             pri_rdi_out_res;
+	bool                                 commit_served_ctx_on_rup;
 };
 
 /**
