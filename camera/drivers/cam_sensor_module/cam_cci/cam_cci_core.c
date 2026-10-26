@@ -2959,6 +2959,12 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 	case MSM_CCI_I2C_SEQUENTIAL_XFER_LOCK:
 	case MSM_CCI_I2C_SEQUENTIAL_XFER_UNLOCK:
 		break;
+	case MSM_CCI_TIMER_FSYNC_ALL:
+	case MSM_CCI_TIMER_FSYNC_INDEPENDENT:
+	case MSM_CCI_GPIO_QUEUE_HALT:
+	case MSM_CCI_GPIO_QUEUE_START:
+		rc = cam_cci_fsync_core_cfg(sd, cci_ctrl);
+		break;
 	default:
 		rc = -ENOIOCTLCMD;
 	}

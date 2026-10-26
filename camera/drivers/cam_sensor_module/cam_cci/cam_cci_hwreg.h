@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2015, 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CAM_CCI_HWREG_
@@ -76,7 +76,17 @@
 #define CCI_I2C_M1_RD_THRESHOLD_ADDR                                0x00000220
 #define CCI_I2C_RD_THRESHOLD_VALUE                                        0x30
 #define CCI_IRQ_GLOBAL_CLEAR_CMD_ADDR                               0x00000c00
-
+/*CCI Timer configuration */
+#define CCI_GPIO_EXECUTE_WC_ADDR                                        0x0700
+#define CCI_GPIO_WORD_COUNT_ADDR                                        0x0704
+#define CCI_GPIO_CUR_CMD_ADDR                                           0x0708
+#define CCI_GPIO_REPORT_STATUS_ADDR                                     0x070c
+#define CCI_GPIO_LOAD_ADDR                                              0x0710
+#define CCI_GPIO_REPORT_STATUS_1_ADDR                                   0x0714
+#define CCI_GPIO_CPAS_MUX_EN                                              0x50
+#define CCI_GPIO_HALT_REQ_SHIFT                                              2
+#define CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_0_4                      10
+#define CCI_CPAS_GPIO_SECOND_LEVEL_MUX_SHIFT_TIMER_5_9                      14
 #define DEBUG_TOP_REG_START                                                0x0
 #define DEBUG_TOP_REG_COUNT                                                 14
 #define DEBUG_MASTER_REG_START                                           0x100

@@ -2937,3 +2937,87 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 
 	return 0;
 }
+
+/* Temporary gpio number to cci_timer map for test purposes */
+static const uint16_t gpio_map[MAX_GPIO_INDEX] = {
+	109, 110, 111, 163, 164
+};
+
+int cam_sensor_util_get_gpio_index(int64_t gpio_number)
+{
+	size_t i;
+
+	for (i = 0; i < MAX_GPIO_INDEX; i++) {
+		if (gpio_number == gpio_map[i])
+			return i;
+	}
+
+	return -EINVAL;
+}
+
+int cam_sensor_util_validate_pulse_durations(struct cci_gpio_timing_schema *schema,
+	uint64_t frame_time_us)
+{
+	/* Tracks the cumulative delay (ns) at the moment each GPIO went high */
+	uint64_t start_cumulative_delay_ns[MAX_GPIO_INDEX] = {0};
+	bool is_gpio_active[MAX_GPIO_INDEX] = {false};
+	uint64_t total_running_delay_ns = 0;
+	uint64_t frame_time_ns = frame_time_us * 1000;
+	int i;
+
+	CAM_DBG(CAM_SENSOR, "Validating %u events against frame_time: %llu us",
+		schema->event_count, frame_time_us);
+
+	for (i = 0; i < schema->event_count; i++) {
+		int gpio_idx = cam_sensor_util_get_gpio_index(schema->events[i].gpio_number);
+		uint32_t id;
+
+		if (gpio_idx < 0 || gpio_idx >= MAX_GPIO_INDEX) {
+			CAM_ERR(CAM_SENSOR, "Invalid GPIO number %lld, not in map",
+				schema->events[i].gpio_number);
+			return -EINVAL;
+		}
+		id = (uint32_t)gpio_idx;
+
+		/* Step 1: Accumulate the global delay timeline (ns) */
+		total_running_delay_ns += (uint64_t)schema->events[i].delay_to_trigger_ns;
+
+		/* Step 2: Handle state transitions */
+		if (schema->events[i].level == CCI_GPIO_LEVEL_HIGH) {
+			/* Record the timestamp (ns) when the pulse starts */
+			start_cumulative_delay_ns[id] = total_running_delay_ns;
+			is_gpio_active[id] = true;
+		} else if (schema->events[i].level == CCI_GPIO_LEVEL_LOW) {
+			if (is_gpio_active[id]) {
+				/*
+				 * Duration = current total delay - delay at start.
+				 * Captures all intermediate delays naturally.
+				 */
+				uint64_t duration_ns = total_running_delay_ns -
+					start_cumulative_delay_ns[id];
+
+				CAM_DBG(CAM_SENSOR, "GPIO %u pulse width: %llu ns",
+					id, duration_ns);
+
+				if (duration_ns >= frame_time_ns) {
+					CAM_ERR(CAM_SENSOR,
+						"GPIO %u pulse (%llu ns) exceeds frame time (%llu ns)",
+						id, duration_ns, frame_time_ns);
+					return -EINVAL;
+				}
+				is_gpio_active[id] = false;
+			}
+		}
+	}
+
+	for (i = 0; i < MAX_GPIO_INDEX; i++) {
+		if (is_gpio_active[i]) {
+			CAM_ERR(CAM_SENSOR,
+				"GPIO %u has no LOW transition at end of schema",
+				i);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
