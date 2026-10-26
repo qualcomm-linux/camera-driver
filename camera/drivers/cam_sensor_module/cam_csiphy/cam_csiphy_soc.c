@@ -124,7 +124,7 @@ int32_t cam_csiphy_common_status_reg_dump(struct csiphy_device *csiphy_dev,
 			CAM_INFO(CAM_CSIPHY, "CSIPHY%d_COMMON_STATUS%u = 0x%x",
 				csiphy_dev->soc_info.index, reg_id, val);
 		if (buffer && (reg_id < CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT))
-			buffer[reg_id] = val;
+			buffer[reg_id] |= val;
 	}
 
 	/*
