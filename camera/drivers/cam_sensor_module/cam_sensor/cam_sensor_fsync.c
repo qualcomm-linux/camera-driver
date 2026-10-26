@@ -225,7 +225,8 @@ free_mode_cfg:
 	return rc;
 }
 
-int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl, int64_t req_id)
+int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl,
+		int64_t req_id, enum cam_cci_cmd_type cmd_opcode)
 {
 	uint32_t idx = req_id % MAX_PER_FRAME_ARRAY;
 	struct cam_sensor_fsync_slot *slot;
@@ -275,8 +276,7 @@ int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl, int64_t req_id)
 	 * MSM_CCI_TIMER_FSYNC_INDEPENDENT now handles load + start +
 	 * transient queue release in a single call.
 	 */
-	rc = cam_sensor_cci_i2c_util(&s_ctrl->io_master_info,
-		MSM_CCI_TIMER_FSYNC_INDEPENDENT);
+	rc = cam_sensor_cci_i2c_util(&s_ctrl->io_master_info, cmd_opcode);
 	if (rc < 0)
 		CAM_ERR(CAM_SENSOR,
 			"Sensor[%s] GPIO fsync failed rc=%d req_id=%lld",
