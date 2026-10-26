@@ -2976,6 +2976,7 @@ static int cam_ife_csid_ver2_get_hw_caps(void *hw_priv,
 	void *get_hw_cap_args, uint32_t arg_size)
 {
 	int rc = 0;
+	uint32_t                               res_id;
 	struct cam_ife_csid_hw_caps           *hw_caps;
 	struct cam_ife_csid_ver2_hw           *csid_hw;
 	struct cam_hw_info                    *hw_info;
@@ -3010,6 +3011,14 @@ static int cam_ife_csid_ver2_get_hw_caps(void *hw_priv,
 	hw_caps->sfe_ipp_input_rdi_res = csid_reg->cmn_reg->sfe_ipp_input_rdi_res;
 	hw_caps->camif_irq_support = csid_reg->cmn_reg->camif_irq_support;
 	hw_caps->is_ife_sfe_mapped = csid_reg->is_ife_sfe_mapped;
+
+	hw_caps->yuv_chroma_conversion_rdi_res = 0;
+	for (res_id = CAM_IFE_PIX_PATH_RES_RDI_0; res_id <= CAM_IFE_PIX_PATH_RES_RDI_11; res_id++) {
+		if (csid_reg->path_reg[res_id] &&
+			(csid_reg->path_reg[res_id]->capabilities &
+			CAM_IFE_CSID_CAP_YUV_CHROMA_CONVERSION))
+			hw_caps->yuv_chroma_conversion_rdi_res |= BIT(res_id);
+	}
 
 	CAM_DBG(CAM_ISP,
 		"CSID:%u num-rdis:%d, num-pix:%d, major:%d minor:%d ver:%d",

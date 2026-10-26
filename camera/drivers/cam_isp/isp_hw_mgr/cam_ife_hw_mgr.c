@@ -3411,6 +3411,27 @@ end:
 	return can_use_lite;
 }
 
+struct cam_ife_csid_hw_caps *cam_ife_hw_mgr_get_csid_hw_caps(
+	struct cam_ife_hw_mgr_ctx *ife_ctx)
+{
+	struct cam_ife_hw_concrete_ctx *c_ctx = ife_ctx->concr_ctx;
+	struct cam_ife_hw_mgr          *ife_hw_mgr = c_ctx->hw_mgr;
+	int i;
+
+	if (c_ctx->left_hw_idx != CAM_IFE_CSID_HW_NUM_MAX)
+		return &ife_hw_mgr->csid_hw_caps[c_ctx->left_hw_idx];
+
+	for (i = 0; i < CAM_IFE_CSID_HW_NUM_MAX; i++) {
+		if (ife_hw_mgr->csid_devices[i] &&
+			ife_hw_mgr->csid_hw_caps[i].is_lite)
+			return &ife_hw_mgr->csid_hw_caps[i];
+	}
+
+	CAM_ERR(CAM_ISP, "No CSID hw caps available, ctx_idx: %u",
+		c_ctx->ctx_index);
+	return NULL;
+}
+
 static int cam_ife_hw_mgr_acquire_res_ife_bus_rd(
 	struct cam_ife_hw_mgr_ctx                  *ife_ctx,
 	struct cam_isp_in_port_generic_info        *in_port)
@@ -4394,7 +4415,8 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 	}
 
 	if (per_port_acquire) {
-		if (cam_ife_hw_mgr_update_vc_dt_stream_grp(csid_res, index, path_res_id, false))
+		if (cam_ife_hw_mgr_update_vc_dt_stream_grp(ife_ctx, csid_res, index,
+			path_res_id, false))
 			return -EINVAL;
 		if ((!csid_res->vc) && (!csid_res->dt)) {
 			CAM_DBG(CAM_ISP, "no pixel path configurations");
@@ -4607,7 +4629,8 @@ static int cam_ife_hw_mgr_acquire_csid_rdi_util(
 	}
 
 	if (per_port_acquire) {
-		if (cam_ife_hw_mgr_update_vc_dt_stream_grp(csid_res, index, path_res_id, true))
+		if (cam_ife_hw_mgr_update_vc_dt_stream_grp(ife_ctx, csid_res, index,
+			path_res_id, true))
 			return -EINVAL;
 	}
 
@@ -4773,6 +4796,12 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 	uint32_t                               out_res_count = 0;
 	uint32_t                               rdi_yuv_conversion_stream_cnt = 0;
 	struct cam_ife_hw_mgr_stream_grp_config *grp_cfg;
+	struct cam_ife_csid_hw_caps           *csid_caps;
+	uint32_t                               yuv_skip_bitmap;
+	uint32_t                               yuv_res_bitmap;
+	uint32_t                               rdi_idx;
+	uint32_t                               actual_res_id;
+	uint32_t                               idx;
 
 	if (in_port->per_port_en && (index != CAM_IFE_STREAM_GRP_INDEX_NONE)) {
 		out_res_count = (g_ife_sns_grp_cfg.grp_cfg[index]->rdi_stream_cfg_cnt -
@@ -4798,16 +4827,32 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 		if (res_id == CAM_IFE_PIX_PATH_RES_MAX)
 			continue;
 		} else {
-			res_id = CAM_IFE_PIX_PATH_RES_RDI_0 + i;
-			if (res_id >= CAM_IFE_PIX_PATH_RES_RDI_3 &&
-				res_id <= CAM_IFE_PIX_PATH_RES_RDI_5) {
-				res_id = CAM_IFE_PIX_PATH_RES_RDI_1 + i;
+			csid_caps = cam_ife_hw_mgr_get_csid_hw_caps(ife_ctx);
+			if (!csid_caps) {
+				rc = -EINVAL;
+				break;
+			}
+			yuv_skip_bitmap = csid_caps->yuv_chroma_conversion_rdi_res;
+			idx = 0;
+			res_id = CAM_IFE_PIX_PATH_RES_MAX;
 
-				if (res_id == CAM_IFE_PIX_PATH_RES_RDI_5) {
-					CAM_ERR(CAM_ISP, "Unsupported Usecase");
-					rc = -EINVAL;
+			for (rdi_idx = 0; rdi_idx < csid_caps->num_rdis; rdi_idx++) {
+				if (!cam_ife_csid_get_rdi_res_id_from_index(rdi_idx,
+					&actual_res_id))
+					continue;
+				if (BIT(actual_res_id) & yuv_skip_bitmap)
+					continue;
+				if (idx == i) {
+					res_id = actual_res_id;
 					break;
 				}
+				idx++;
+			}
+
+			if (res_id == CAM_IFE_PIX_PATH_RES_MAX) {
+				CAM_ERR(CAM_ISP, "Unsupported Usecase");
+				rc = -EINVAL;
+				break;
 			}
 		}
 
@@ -4825,10 +4870,23 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 
 	if (per_port_acquire) {
 		if (rdi_yuv_conversion_stream_cnt) {
+			csid_caps = cam_ife_hw_mgr_get_csid_hw_caps(ife_ctx);
+			if (!csid_caps) {
+				rc = -EINVAL;
+				goto rdi_yuv_end;
+			}
+			yuv_res_bitmap = csid_caps->yuv_chroma_conversion_rdi_res;
+
 			for (i = 0; i < rdi_yuv_conversion_stream_cnt; i++) {
-				res_id = CAM_IFE_PIX_PATH_RES_RDI_3 + i;
-				if (res_id > CAM_IFE_PIX_PATH_RES_RDI_3)
-					res_id = CAM_IFE_PIX_PATH_RES_RDI_5;
+				if (!yuv_res_bitmap) {
+					CAM_ERR(CAM_ISP,
+						"YUV chroma conversion not supported on this CSID hw");
+					rc = -EINVAL;
+					break;
+				}
+
+				res_id = ffs(yuv_res_bitmap) - 1;
+				yuv_res_bitmap &= ~BIT(res_id);
 
 				CAM_DBG(CAM_ISP, "Acquire Ctx: %u Res %d",
 					c_ctx->ctx_index, res_id);
@@ -4845,6 +4903,7 @@ int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 		}
 	}
 
+rdi_yuv_end:
 	CAM_DBG(CAM_ISP, "Ctx: %u  rdi: %d", c_ctx->ctx_index, res_id);
 	return rc;
 }

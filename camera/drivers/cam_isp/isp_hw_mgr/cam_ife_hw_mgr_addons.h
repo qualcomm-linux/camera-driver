@@ -48,7 +48,8 @@ bool cam_ife_hw_mgr_check_outport_supported_for_lite(uint32_t res_type);
 
 int cam_convert_res_id_to_hw_path(int res_id, int csid_res_id);
 
-int cam_ife_hw_mgr_update_vc_dt_stream_grp(struct cam_isp_hw_mgr_res *isp_res, int index,
+int cam_ife_hw_mgr_update_vc_dt_stream_grp(struct cam_ife_hw_mgr_ctx *ife_ctx,
+		struct cam_isp_hw_mgr_res *isp_res, int index,
 		enum cam_ife_pix_path_res_id path_res_id, bool is_rdi_path);
 
 int cam_ife_hw_mgr_acquire_res_stream_grp(struct cam_ife_hw_mgr_ctx *ife_ctx,
