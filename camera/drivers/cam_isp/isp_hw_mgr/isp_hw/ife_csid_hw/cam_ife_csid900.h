@@ -665,11 +665,11 @@ static struct cam_ife_csid_ver2_csi2_rx_reg_info
 		.short_pkt_strobe_rst_shift      = 1,
 		.cphy_pkt_strobe_rst_shift       = 2,
 		.unmapped_pkt_strobe_rst_shift   = 3,
-		.fatal_err_mask                  = {0x20F00000, 0x0,},
+		.fatal_err_mask                  = {0x20F00000, 0x18,},
 		.part_fatal_err_mask             = {0x000FF000, 0x0,},
 		.non_fatal_err_mask              = {0x08000000, 0x0,},
 		.top_irq_mask                    = {0x4, 0x0,},
-		.rx_rx2_irq_mask                 = 0x18,
+		.rx_rx2_irq_mask                 = 0x80000000,
 };
 
 static struct cam_ife_csid_ver2_common_reg_info
@@ -2604,7 +2604,9 @@ static struct cam_ife_csid_rx_debug_mask cam_ife_csid_900_rx_debug_mask = {
 
 		BIT_ULL(CAM_IFE_CSID_RX_LONG_PKT_CAPTURED) |
 			BIT_ULL(CAM_IFE_CSID_RX_SHORT_PKT_CAPTURED) |
-			BIT_ULL(CAM_IFE_CSID_RX_CPHY_PKT_HDR_CAPTURED),
+			BIT_ULL(CAM_IFE_CSID_RX_CPHY_PKT_HDR_CAPTURED) |
+			BIT_ULL(CAM_IFE_CSID_RX_ERROR_ILLEGAL_PROGRAMMING) |
+			BIT_ULL(CAM_IFE_CSID_RX_ERROR_CSE_SECURITY),
 	},
 
 	.bit_pos[CAM_IFE_CSID_RX_DL0_EOT_CAPTURED] = 0,
@@ -2616,9 +2618,6 @@ static struct cam_ife_csid_rx_debug_mask cam_ife_csid_900_rx_debug_mask = {
 	.bit_pos[CAM_IFE_CSID_RX_DL2_SOT_CAPTURED] = 6,
 	.bit_pos[CAM_IFE_CSID_RX_DL3_SOT_CAPTURED] = 7,
 	.bit_pos[CAM_IFE_CSID_RX_WARNING_ECC] = 8,
-	.bit_pos[CAM_IFE_CSID_RX_LONG_PKT_CAPTURED] = 0,
-	.bit_pos[CAM_IFE_CSID_RX_SHORT_PKT_CAPTURED] = 1,
-	.bit_pos[CAM_IFE_CSID_RX_CPHY_PKT_HDR_CAPTURED] = 2,
 	.bit_pos[CAM_IFE_CSID_RX_ERROR_CPHY_PH_CRC] = 24,
 	.bit_pos[CAM_IFE_CSID_RX_LANE0_FIFO_OVERFLOW] = 20,
 	.bit_pos[CAM_IFE_CSID_RX_LANE1_FIFO_OVERFLOW] = 21,
@@ -2638,6 +2637,13 @@ static struct cam_ife_csid_rx_debug_mask cam_ife_csid_900_rx_debug_mask = {
 	.bit_pos[CAM_IFE_CSID_RX_DL1_SOT_LOST] = 17,
 	.bit_pos[CAM_IFE_CSID_RX_DL2_SOT_LOST] = 18,
 	.bit_pos[CAM_IFE_CSID_RX_DL3_SOT_LOST] = 19,
+
+	/* CSI2_RX_IRQ_STATUS_2 */
+	.bit_pos[CAM_IFE_CSID_RX_LONG_PKT_CAPTURED] = 0,
+	.bit_pos[CAM_IFE_CSID_RX_SHORT_PKT_CAPTURED] = 1,
+	.bit_pos[CAM_IFE_CSID_RX_CPHY_PKT_HDR_CAPTURED] = 2,
+	.bit_pos[CAM_IFE_CSID_RX_ERROR_ILLEGAL_PROGRAMMING] = 3,
+	.bit_pos[CAM_IFE_CSID_RX_ERROR_CSE_SECURITY] = 4,
 };
 
 static struct cam_ife_csid_top_debug_mask cam_ife_csid_900_top_debug_mask = {

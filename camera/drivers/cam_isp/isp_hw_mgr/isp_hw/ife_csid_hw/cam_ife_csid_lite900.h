@@ -546,7 +546,7 @@ static struct cam_ife_csid_ver2_csi2_rx_reg_info
 		.part_fatal_err_mask             = {0x000FF000, 0x0,},
 		.non_fatal_err_mask              = {0x08000000, 0x0,},
 		.top_irq_mask                    = {0x4, 0x0,},
-		.rx_rx2_irq_mask                 = 0x18,
+		.rx_rx2_irq_mask                 = 0x80000000,
 };
 
 static struct cam_ife_csid_ver2_common_reg_info
