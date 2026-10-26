@@ -1126,6 +1126,8 @@ static int cam_sfe_bus_start_bus_rd(
 	struct cam_sfe_bus_rd_data		  *rsrc_data = NULL;
 	struct cam_sfe_bus_rd_priv		  *bus_priv = NULL;
 	struct cam_sfe_bus_rd_common_data *common_data = NULL;
+	struct cam_hw_info                *sfe_hw = NULL;
+	struct cam_sfe_hw_core_info       *core_info = NULL;
 
 	if (!hw_priv) {
 		CAM_ERR(CAM_SFE, "Invalid input");
@@ -1136,6 +1138,8 @@ static int cam_sfe_bus_start_bus_rd(
 	rsrc_data = sfe_bus_rd->res_priv;
 	bus_priv = rsrc_data->bus_priv;
 	common_data = rsrc_data->common_data;
+	sfe_hw = (struct cam_hw_info *)common_data->hw_intf->hw_priv;
+	core_info = (struct cam_sfe_hw_core_info *)sfe_hw->core_info;
 
 	CAM_DBG(CAM_SFE, "SFE:%d start RD type:0x%x",
 		common_data->hw_intf->hw_idx, sfe_bus_rd->res_id);
@@ -1163,7 +1167,8 @@ static int cam_sfe_bus_start_bus_rd(
 			common_data->hw_intf->hw_idx, sfe_bus_rd->res_id, if_cmd_val);
 	}
 
-	if (rsrc_data->secure_mode == CAM_SECURE_MODE_SECURE)
+	if (rsrc_data->secure_mode == CAM_SECURE_MODE_SECURE ||
+		core_info->sfe_hw_info->sec_cfg_errata)
 		cam_io_w_mb(1, common_data->mem_base +
 			common_data->common_reg->security_cfg);
 

@@ -1944,8 +1944,10 @@ static int __cam_vfe_handle_frame_timing_irqs(struct cam_isp_resource_node *vfe_
 	struct cam_vfe_mux_ver4_data *vfe_priv = vfe_res->res_priv;
 
 	if (!event) {
-		CAM_WARN(CAM_ISP, "VFE:%u missed %s", vfe_priv->hw_intf->hw_idx,
-			cam_isp_hw_evt_type_to_string(event_type));
+		if (!(vfe_priv->reg_data->is_mc_path &&
+			event_type == CAM_ISP_HW_EVENT_EPOCH))
+			CAM_WARN(CAM_ISP, "VFE:%u missed %s", vfe_priv->hw_intf->hw_idx,
+				cam_isp_hw_evt_type_to_string(event_type));
 	} else {
 		handle_irq_fn(vfe_priv, payload, evt_info);
 		if (!(vfe_priv->top_priv->enable_ife_frame_irqs)

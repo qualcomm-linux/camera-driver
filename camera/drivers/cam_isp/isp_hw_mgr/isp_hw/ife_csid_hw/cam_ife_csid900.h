@@ -706,8 +706,8 @@ static struct cam_ife_csid_ver2_common_reg_info
 	.debug_drv_1_addr                        = 0,
 
 	/*configurations */
-	.major_version                           = 6,
-	.minor_version                           = 9,
+	.major_version                           = 9,
+	.minor_version                           = 0,
 	.version_incr                            = 0,
 	.num_rdis                                = 12,
 	.num_pix                                 = 4,

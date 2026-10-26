@@ -6492,7 +6492,8 @@ static void cam_ife_csid_ver2_send_secure_info(
 static int cam_ife_csid_ver2_configure_v900_domain_id(
 	const struct cam_ife_csid_ver2_reg_info *csid_reg,
 	uint32_t hw_idx,
-	uint32_t res_id)
+	uint32_t res_id,
+	bool offline_mode)
 {
 	const struct cam_ife_csid_ver2_domain_id_reg_info *domain_id_reg =
 		csid_reg->domain_id_reg;
@@ -6546,6 +6547,13 @@ static int cam_ife_csid_ver2_configure_v900_domain_id(
 
 	CAM_DBG(CAM_ISP, "writing 0x%x value to 0x%x reg", cfg_val, cfg_addr);
 	cam_io_w_mb(cfg_val, sec_base + cfg_addr);
+
+	if (offline_mode) {
+		cam_io_w_mb(domain_id_reg->cfg_val_mask,
+			sec_base + domain_id_reg->cfg0_addr);
+		CAM_DBG(CAM_ISP, "writing 0x%x value to 0x%x reg",
+			domain_id_reg->cfg_val_mask, domain_id_reg->cfg0_addr);
+	}
 
 	iounmap(sec_base);
 	return 0;
@@ -6661,7 +6669,8 @@ static int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 				goto end;
 
 			rc = cam_ife_csid_ver2_configure_v900_domain_id(csid_reg,
-				csid_hw->hw_intf->hw_idx, res->res_id);
+				csid_hw->hw_intf->hw_idx, res->res_id,
+				csid_hw->flags.offline_mode);
 			if (rc)
 				goto end;
 			break;
@@ -6688,7 +6697,8 @@ static int cam_ife_csid_ver2_start(void *hw_priv, void *args,
 				goto end;
 
 			rc = cam_ife_csid_ver2_configure_v900_domain_id(csid_reg,
-				csid_hw->hw_intf->hw_idx, res->res_id);
+				csid_hw->hw_intf->hw_idx, res->res_id,
+				csid_hw->flags.offline_mode);
 			if (rc)
 				goto end;
 			break;

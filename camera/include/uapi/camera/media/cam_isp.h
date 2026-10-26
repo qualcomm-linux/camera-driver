@@ -226,6 +226,7 @@
 #define CAM_ISP_HDR_MODE_DYNAMIC_SWITCH_EN     BIT(8)
 #define CAM_ISP_NFI_BASED_MODE_SWITCH_EN       BIT(9)
 #define CAM_ISP_YUV_CHROMA_CONVERSION_DS_EN    BIT(10)
+#define CAM_ISP_OFFLINE_MODE_EN                BIT(11)
 
 /* ISP core cfg flag params */
 #define CAM_ISP_PARAM_CORE_CFG_HDR_MUX_SEL BIT(0)
@@ -266,6 +267,14 @@
  * to indicate if RCS to be enabled.
  */
 #define CAM_IFE_WM_RCS_EN                    BIT(1)
+
+/*
+ * params[] indices for cam_isp_in_port_csid_info, acquire v3.
+ * SFE_IN_PATH_TYPE: SFE input path type (see cam_isp_sfe.h).
+ * OFFLINE_FPS: literal fps, valid only with CAM_ISP_OFFLINE_MODE_EN.
+ */
+#define CAM_ISP_IN_PORT_CSID_PARAM_IDX_SFE_IN_PATH_TYPE  0
+#define CAM_ISP_IN_PORT_CSID_PARAM_IDX_OFFLINE_FPS       1
 
 /* ISP stream config params */
 #define CAM_ISP_STREAM_GROUP_CFG_MAX   12
