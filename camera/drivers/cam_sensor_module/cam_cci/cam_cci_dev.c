@@ -272,7 +272,6 @@ static int cam_cci_load_gpio_queue(struct v4l2_subdev *sd,
 	uint32_t wordcount = 0;
 	int queue = 0;
 	int queue_size = 0;
-	int i;
 	struct cci_device *cci_dev;
 
 	cci_dev = v4l2_get_subdevdata(sd);
@@ -322,8 +321,12 @@ static int cam_cci_load_gpio_queue(struct v4l2_subdev *sd,
 	CAM_DBG(CAM_CCI, "Loading %u cmds into GPIO queue %d (reg=0x%x)",
 		cmd_buf->cmd_count, queue, reg_addr);
 
-	for (i = 0; i < cmd_buf->cmd_count; i++)
-		cam_io_w_mb(cmd_buf->buf[i], base + reg_addr);
+	rc = cam_cci_write_gpio_cmd_buf(base, reg_addr, cmd_buf);
+	if (rc) {
+		CAM_ERR(CAM_CCI, "Failed writing cmd_buf to GPIO queue %d: %d",
+			queue, rc);
+		goto release_queue;
+	}
 
 	wordcount = cam_io_r_mb(base +
 		(CCI_GPIO_WORD_COUNT_ADDR + (0x100 * queue)));
@@ -348,6 +351,7 @@ static int __cci_gpio_queue_start(struct v4l2_subdev *sd,
 	void __iomem *base = NULL;
 	struct cci_device *cci_dev = NULL;
 	uint32_t val, wordcount;
+	bool is_infinite_mode = false;
 
 	cci_dev = v4l2_get_subdevdata(sd);
 	if (!cci_dev || !c_ctrl) {
@@ -369,6 +373,28 @@ static int __cci_gpio_queue_start(struct v4l2_subdev *sd,
 
 	val = 0x10 << (c_ctrl->cci_info->acquired_gpio_queue);
 	cam_io_w_mb(val, base + CCI_QUEUE_START_ADDR);
+
+	/*
+	 * A queue built for infinite frequency mode ends in
+	 * CCI_GPIO_CONTINUE_CMD and loops indefinitely by design, so it
+	 * never drains -- polling for empty would time out. Detect this
+	 * from the last command in the buffer just loaded and skip the
+	 * poll only in that case; every other mode still drains and polls
+	 * as before.
+	 */
+	if (c_ctrl->cci_info->cmd_buf.cmd_count > 0) {
+		uint32_t last_cmd = c_ctrl->cci_info->cmd_buf.buf[
+			c_ctrl->cci_info->cmd_buf.cmd_count - 1] & 0xF;
+
+		is_infinite_mode = (last_cmd == CCI_GPIO_CONTINUE_CMD);
+	}
+
+	if (is_infinite_mode) {
+		CAM_DBG(CAM_CCI,
+			"Infinite mode GPIO queue %d started, skipping drain poll",
+			c_ctrl->cci_info->acquired_gpio_queue);
+		return 0;
+	}
 
 	rc = cam_cci_poll_gpio_queue_empty(base,
 		c_ctrl->cci_info->acquired_gpio_queue);
@@ -1528,7 +1554,7 @@ int cam_cci_timing_schema_to_cmd_buf(struct cci_gpio_timing_schema *schema,
 		}
 
 		/* Get GPIO index */
-		gpio_idx = cam_sensor_util_get_gpio_index(schema->events[i].gpio_number);
+		gpio_idx = cam_sensor_util_remap_timer_to_gpioq_mask(schema->events[i].gpio_number);
 		if (gpio_idx < 0) {
 			CAM_ERR(CAM_CCI, "Invalid GPIO number %lld",
 				schema->events[i].gpio_number);
@@ -1561,6 +1587,82 @@ int cam_cci_timing_schema_to_cmd_buf(struct cci_gpio_timing_schema *schema,
 
 	CAM_DBG(CAM_CCI, "Converted timing schema to cmd_buf: %d commands",
 		cmd_buf->cmd_count);
+
+	return 0;
+}
+
+int cam_cci_build_infinite_mode_cmd_buf(struct cci_gpio_timing_schema *schema,
+	struct cam_cci_gpio_cmd_buf *cmd_buf)
+{
+	int rc;
+
+	if (!schema || !cmd_buf) {
+		CAM_ERR(CAM_CCI, "Invalid params schema=%pK cmd_buf=%pK",
+			schema, cmd_buf);
+		return -EINVAL;
+	}
+
+	rc = cam_cci_timing_schema_to_cmd_buf(schema, cmd_buf);
+	if (rc < 0) {
+		CAM_ERR(CAM_CCI, "Failed to convert timing schema: %d", rc);
+		return rc;
+	}
+
+	/* Need room for REPEAT (prepended) + REPORT + CONTINUE (appended) */
+	if (cmd_buf->cmd_count + 3 > CCI_MAX_GPIO_QUEUE_SIZE) {
+		CAM_ERR(CAM_CCI,
+			"cmd_buf (%u cmds) has no room for REPEAT/REPORT/CONTINUE (max=%d)",
+			cmd_buf->cmd_count, CCI_MAX_GPIO_QUEUE_SIZE);
+		return -EOVERFLOW;
+	}
+
+	/* Prepend CCI_GPIO_REPEAT_CMD so the queue loops from the top */
+	memmove(&cmd_buf->buf[1], &cmd_buf->buf[0],
+		cmd_buf->cmd_count * sizeof(cmd_buf->buf[0]));
+	cmd_buf->buf[0] = 0 << 4 | CCI_GPIO_REPEAT_CMD;
+	cmd_buf->cmd_count++;
+
+	/* Append CCI_GPIO_REPORT_CMD */
+	rc = cam_cci_fill_gpio_cmd_buffer(cmd_buf, CCI_GPIO_REPORT_CMD, 1);
+	if (rc < 0) {
+		CAM_ERR(CAM_CCI, "Failed to add REPORT cmd: %d", rc);
+		return rc;
+	}
+
+	/* Append CCI_GPIO_CONTINUE_CMD to close the repeat loop */
+	rc = cam_cci_fill_gpio_cmd_buffer(cmd_buf, CCI_GPIO_CONTINUE_CMD, 0);
+	if (rc < 0) {
+		CAM_ERR(CAM_CCI, "Failed to add CONTINUE cmd: %d", rc);
+		return rc;
+	}
+
+	cmd_buf->cmd_buf_ready = true;
+
+	CAM_DBG(CAM_CCI,
+		"Built infinite mode cmd_buf: %d commands (REPEAT/.../REPORT/CONTINUE)",
+		cmd_buf->cmd_count);
+
+	return 0;
+}
+
+int cam_cci_write_gpio_cmd_buf(void __iomem *base, uint32_t reg_addr,
+	const struct cam_cci_gpio_cmd_buf *cmd_buf)
+{
+	int i;
+
+	if (!base || !cmd_buf) {
+		CAM_ERR(CAM_CCI, "Invalid params base=%pK cmd_buf=%pK",
+			base, cmd_buf);
+		return -EINVAL;
+	}
+
+	if (cmd_buf->cmd_count == 0) {
+		CAM_ERR(CAM_CCI, "cmd_buf is empty, nothing to write");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < cmd_buf->cmd_count; i++)
+		cam_io_w_mb(cmd_buf->buf[i], base + reg_addr);
 
 	return 0;
 }

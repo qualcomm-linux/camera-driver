@@ -48,6 +48,9 @@ int msm_camera_pinctrl_init
 
 int32_t cam_sensor_util_get_current_qtimer_ns(uint64_t *qtime_ns);
 
+int cam_sensor_util_remap_timer_to_gpioq_mask(
+	enum msm_camera_power_seq_type seq_type);
+
 int32_t cam_sensor_util_write_qtimer_to_io_buffer(
 	uint64_t qtime_ns, struct cam_buf_io_cfg *io_cfg);
 
