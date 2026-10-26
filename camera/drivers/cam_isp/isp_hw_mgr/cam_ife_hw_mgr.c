@@ -5441,8 +5441,10 @@ static int cam_ife_hw_mgr_acquire_offline_res_ife_camif(
 	 */
 	csid_caps = cam_ife_hw_mgr_get_csid_hw_caps(ife_ctx);
 	if (csid_caps && csid_caps->major_version == 9 &&
-		csid_caps->minor_version == 0)
+		csid_caps->minor_version == 0) {
 		acquired_hw_path[i] |= CAM_ISP_RDI0_PATH;
+		c_ctx->commit_served_ctx_on_rup = true;
+	}
 
 	CAM_DBG(CAM_ISP, "Acquired VFE:%d CAMIF for LEFT, ctx_idx: %u",
 		ife_src_res->hw_res[0]->hw_intf->hw_idx, c_ctx->ctx_index);
@@ -18105,7 +18107,8 @@ static int cam_ife_hw_mgr_event_handler_offline(
 		 * served_ctx_r is never committed on EPOCH, so commit it here
 		 * instead - RUP always precedes EPOCH for a given frame.
 		 */
-		c_ctx->served_ctx_r = c_ctx->served_ctx_w;
+		if (c_ctx->commit_served_ctx_on_rup)
+			c_ctx->served_ctx_r = c_ctx->served_ctx_w;
 		ctx_idx_rd = c_ctx->served_ctx_w;
 		break;
 	case CAM_ISP_HW_EVENT_EOF:
