@@ -43,7 +43,7 @@ static int cam_sensor_fsync_validate_timer(struct cam_sensor_ctrl_t *s_ctrl,
 	 * refcount_to_trigger sensors reach the stored trigger point.
 	 */
 	if (freq_info->freq_mode == CCI_TIMER_INFINITE_FRAME)
-		cam_sensor_fsync_trigger_set(
+		cam_sensor_fsync_trigger_set(s_ctrl,
 			tpoint_info->tp.tpoint_fsync_info,
 			tpoint_info->refcount_to_trigger);
 
@@ -84,7 +84,6 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 	struct cci_sync_info *sync_info = NULL;
 	struct cci_timer_fsync_info *fsync_cfg = NULL;
 	void *mode_cfg = NULL;
-	uint32_t idx;
 	int rc;
 
 	/* Step 1: Minimum size check for the fixed-size top-level struct */
@@ -165,26 +164,41 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 		goto free_mode_cfg;
 
 	/* Step 6: Convert timing schema into a CCI GPIO command buffer and
-	 * store it in the per-request fsync slot
+	 * store it in the fsync slot for this configuration
 	 */
 	if (s_ctrl->io_master_info.master_type == CCI_MASTER) {
 		struct cam_sensor_fsync_slot *slot;
+		bool infinite = (fsync_cfg->freq_info.freq_mode ==
+			CCI_TIMER_INFINITE_FRAME);
 
-		if (!s_ctrl->per_frame_fsync) {
-			CAM_ERR(CAM_SENSOR, "SYNC_INFO: per_frame_fsync not allocated");
-			rc = -ENOMEM;
-			goto free_mode_cfg;
+		/*
+		 * Infinite mode is armed at a stage boundary (ACQUIRE /
+		 * STREAM_ON) where no per-frame request has been submitted, so
+		 * it must not be stored in the request-indexed array: the
+		 * trigger path has no request id to look it up with, and the
+		 * per-frame reset/aging paths would invalidate it underneath.
+		 * Keep it in its own slot instead.
+		 */
+		if (infinite) {
+			slot = &s_ctrl->fsync_infinite;
+		} else {
+			if (!s_ctrl->per_frame_fsync) {
+				CAM_ERR(CAM_SENSOR,
+					"SYNC_INFO: per_frame_fsync not allocated");
+				rc = -ENOMEM;
+				goto free_mode_cfg;
+			}
+
+			slot = &s_ctrl->per_frame_fsync[
+				s_ctrl->last_updated_req % MAX_PER_FRAME_ARRAY];
 		}
-
-		idx = s_ctrl->last_updated_req % MAX_PER_FRAME_ARRAY;
-		slot = &s_ctrl->per_frame_fsync[idx];
 
 		/*
 		 * D1 (deferred): only a single GPIO queue (cmd_buf[0]) is
 		 * populated here. Multi-queue support will be added as part
 		 * of the fsync object redesign.
 		 */
-		if (fsync_cfg->freq_info.freq_mode == CCI_TIMER_INFINITE_FRAME)
+		if (infinite)
 			rc = cam_cci_build_infinite_mode_cmd_buf(
 				&fsync_cfg->timer_info, &slot->cmd_buf[0]);
 		else
@@ -193,17 +207,21 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 		if (rc < 0) {
 			CAM_ERR(CAM_SENSOR,
 				"Failed to convert timing schema: %d", rc);
+			slot->is_valid = false;
 			goto free_mode_cfg;
 		}
 
 		slot->num_queues = 1;
-		slot->request_id = s_ctrl->last_updated_req;
+		slot->request_id = infinite ? CAM_SENSOR_FSYNC_REQ_ID_NONE :
+			s_ctrl->last_updated_req;
 		slot->is_valid = true;
 
 		CAM_DBG(CAM_SENSOR,
 			"SYNC_INFO: converted to cmd_buf[0] (%u cmds), "
-			"stored in per_frame_fsync[%u] req_id=%lld",
-			slot->cmd_buf[0].cmd_count, idx, s_ctrl->last_updated_req);
+			"stored in %s req_id=%lld",
+			slot->cmd_buf[0].cmd_count,
+			infinite ? "fsync_infinite" : "per_frame_fsync",
+			slot->request_id);
 	} else {
 		CAM_INFO(CAM_SENSOR,
 			"SYNC_INFO: SENSOR [%s] is not on CCI master, "
@@ -213,10 +231,10 @@ int cam_sensor_fsync_handle_blob(uint8_t *blob_data, uint32_t blob_size,
 	s_ctrl->fsync_blob_ready = true;
 
 	CAM_INFO(CAM_SENSOR,
-		 "SYNC_INFO: decode OK - mode=%d req_id=%lld cached into per_frame_fsync[%u]",
+		 "SYNC_INFO: decode OK - mode=%d freq_mode=%d req_id=%lld",
 		 sync_info->operational_mode,
-		 s_ctrl->last_updated_req,
-		 (uint32_t)(s_ctrl->last_updated_req % MAX_PER_FRAME_ARRAY));
+		 fsync_cfg->freq_info.freq_mode,
+		 s_ctrl->last_updated_req);
 
 	rc = 0;
 
@@ -228,24 +246,37 @@ free_mode_cfg:
 int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl,
 		int64_t req_id, enum cam_cci_cmd_type cmd_opcode)
 {
-	uint32_t idx = req_id % MAX_PER_FRAME_ARRAY;
 	struct cam_sensor_fsync_slot *slot;
 	struct cam_sensor_cci_client *cci_client;
+	bool infinite;
 	int rc = 0;
 
-	if (!s_ctrl->per_frame_fsync) {
-		CAM_ERR(CAM_SENSOR, "Sensor[%s] per_frame_fsync not allocated",
-			s_ctrl->sensor_name);
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "Null s_ctrl");
 		return -EINVAL;
 	}
 
-	slot = &s_ctrl->per_frame_fsync[idx];
+	infinite = (cmd_opcode == MSM_CCI_TIMER_FSYNC_INFINITE ?
+		true : false);
+
+	if (infinite) {
+		slot = &s_ctrl->fsync_infinite;
+	} else {
+		if (!s_ctrl->per_frame_fsync) {
+			CAM_ERR(CAM_SENSOR, "Sensor[%s] per_frame_fsync not allocated",
+				s_ctrl->sensor_name);
+			return -EINVAL;
+		}
+
+		slot = &s_ctrl->per_frame_fsync[req_id % MAX_PER_FRAME_ARRAY];
+	}
 
 	if (!slot->is_valid || slot->request_id != req_id) {
 		CAM_ERR(CAM_SENSOR,
-			"Sensor[%s] no valid fsync slot for req_id=%lld "
+			"Sensor[%s] no valid %s fsync slot for req_id=%lld "
 			"(slot: valid=%d req_id=%lld)",
-			s_ctrl->sensor_name, req_id,
+			s_ctrl->sensor_name,
+			infinite ? "infinite" : "per-frame", req_id,
 			slot->is_valid, slot->request_id);
 		return -EINVAL;
 	}
@@ -283,9 +314,29 @@ int cam_sensor_fsync_apply(struct cam_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensor_name, rc, req_id);
 
 clear:
-	slot->is_valid = false;
-	slot->request_id = 0;
-	slot->num_queues = 0;
+	/*
+	 * Per-frame slots are one-shot and must be released so the request
+	 * index can be reused. The infinite-mode slot is retained: it is the
+	 * group's standing configuration, re-armed on each stop/start cycle
+	 * without userspace resending the blob. Double-arming within one cycle
+	 * is prevented by the trigger refcount, not by consuming the slot.
+	 * It is dropped explicitly by cam_sensor_fsync_reset().
+	 */
+	if (!infinite) {
+		slot->is_valid = false;
+		slot->request_id = 0;
+		slot->num_queues = 0;
+	}
 
 	return rc;
+}
+
+void cam_sensor_fsync_reset(struct cam_sensor_ctrl_t *s_ctrl)
+{
+	if (!s_ctrl)
+		return;
+
+	memset(&s_ctrl->fsync_infinite, 0, sizeof(s_ctrl->fsync_infinite));
+	s_ctrl->fsync_blob_ready = false;
+	s_ctrl->fsync_counted = false;
 }

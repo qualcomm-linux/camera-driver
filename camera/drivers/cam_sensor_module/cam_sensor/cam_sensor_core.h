@@ -117,6 +117,8 @@ int cam_sensor_process_evt(struct cam_req_mgr_link_evt_data *evt_data);
 int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl, void *arg);
 
 /**
+ * @s_ctrl:              Sensor contributing this fsync configuration; the first
+ *                       caller becomes the group's GPIO queue owner
  * @tpoint:              Trigger point stage of type enum
  *                       cci_timer_fsync_trigger_point at which to fire the
  *                       GPIO fsync (ACQUIRE or STREAM_ON)
@@ -124,10 +126,14 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl, void *arg);
  *                       GPIO queue is started
  *
  * Stores the GPIO fsync trigger point and reference count decoded from a
- * SYNC_INFO blob into the shared trigger tracker. Called from the fsync blob
- * handler; the stored values are consumed post ACQUIRE_DEV / START_DEV.
+ * SYNC_INFO blob into the shared trigger tracker. Called once per participant
+ * from the fsync blob handler with identical parameters, so it is idempotent:
+ * an already-tracked configuration is left untouched rather than rewinding the
+ * count that earlier participants contributed.
  */
-void cam_sensor_fsync_trigger_set(uint32_t tpoint,
+void cam_sensor_fsync_trigger_set(
+	struct cam_sensor_ctrl_t *s_ctrl,
+	uint32_t tpoint,
 	uint32_t refcount_to_trigger);
 
 /**

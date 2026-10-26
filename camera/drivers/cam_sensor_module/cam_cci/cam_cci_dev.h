@@ -85,6 +85,16 @@
 
 #define CCI_VERSION_1_2_9 0x10020009
 #define REPORT_IDSIZE 16
+
+#define CCI_FREQ_KHZ                   37500
+#define CCI_FREQ_KHZ_TO_MHZ_DIV        1000
+#define CCI_NS_TO_US_DIV               1000
+#define CCI_GPIO_MAX_DELAY_28BIT_TIMER 0xFFFFFFF
+#define CCI_GPIO_MAX_DELAY_14BIT_TIMER 0x7FFF
+#define NSEC_TO_CCI_CLK_CYCLES(x) \
+	(((x * CCI_FREQ_KHZ) / CCI_FREQ_KHZ_TO_MHZ_DIV) / CCI_NS_TO_US_DIV)
+
+
 enum cci_i2c_sync {
 	MSM_SYNC_DISABLE,
 	MSM_SYNC_ENABLE,
@@ -432,14 +442,6 @@ void cam_cci_exit_module(void);
  */
 int cam_cci_fsync_core_cfg(struct v4l2_subdev *sd,
 	struct cam_cci_ctrl *cci_ctrl);
-
-#define CCI_FREQ_KHZ                   37500
-#define CCI_FREQ_KHZ_TO_MHZ_DIV        1000
-#define CCI_NS_TO_US_DIV               1000
-#define CCI_GPIO_MAX_DELAY_28BIT_TIMER 0xFFFFFFF
-#define CCI_GPIO_MAX_DELAY_14BIT_TIMER 0x7FFF
-#define NSEC_TO_CCI_CLK_CYCLES(x) \
-	(((x * CCI_FREQ_KHZ) / CCI_FREQ_KHZ_TO_MHZ_DIV) / CCI_NS_TO_US_DIV)
 
 /**
  * cam_cci_fill_gpio_cmd_buffer - Add a GPIO command to the command buffer

@@ -191,6 +191,19 @@ static void cam_cci_clear_ccu_cci_path(struct cci_device *cci_dev)
 	mutex_unlock(&g_ccu_mux_mutex);
 }
 
+void cam_cci_reset_gpio_queue(struct cci_device *cci_dev)
+{
+	int i = 0;
+
+	for (i = 0; i < GPIO_Q_MAX; i++) {
+		mutex_init(&(cci_dev->gpio_queue[i].gpio_q_mutex));
+		cci_dev->gpio_queue[i].fps = 0;
+		cci_dev->gpio_queue[i].is_acquired = false;
+	}
+
+	return;
+}
+
 int cam_cci_init(struct v4l2_subdev *sd,
 	struct cam_cci_ctrl *c_ctrl)
 {
@@ -305,6 +318,8 @@ int cam_cci_init(struct v4l2_subdev *sd,
 
 	cci_dev->payload_size = MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11;
 	cci_dev->support_seq_write = 1;
+
+	cam_cci_reset_gpio_queue(cci_dev);
 
 	rc = cam_cci_init_master(cci_dev, master);
 	if (rc) {
@@ -640,6 +655,7 @@ int cam_cci_soc_release(struct cci_device *cci_dev,
 		cci_dev->i2c_freq_mode[i] = I2C_MAX_MODES;
 	}
 
+	cam_cci_reset_gpio_queue(cci_dev);
 	rc = cam_soc_util_disable_platform_resource(soc_info, CAM_CLK_SW_CLIENT_IDX, true, true);
 	if (rc) {
 		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d platform resources disable failed, rc: %d",
