@@ -315,6 +315,7 @@ static int cam_get_domain_for_fw(struct device *dev, struct camera_firmware *fw)
 	fw->has_el2_iommu = true;
 	memset(&info, 0, sizeof(info));
 	info.fwnode   = &np->fwnode;
+	info.id       = PLATFORM_DEVID_AUTO;
 	info.parent   = dev;
 	info.name     = np->name;
 	info.dma_mask = DMA_BIT_MASK(32);
