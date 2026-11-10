@@ -464,9 +464,9 @@ int hfi_cmd_ubwc_config(int client_handle, uint32_t *ubwc_cfg)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_UBWC_CFG;
-	dbg_prop->prop_data[1] = ubwc_cfg[0];
-	dbg_prop->prop_data[2] = ubwc_cfg[1];
+	dbg_prop->prop_data_flex[0] = HFI_PROP_SYS_UBWC_CFG;
+	dbg_prop->prop_data_flex[1] = ubwc_cfg[0];
+	dbg_prop->prop_data_flex[2] = ubwc_cfg[1];
 
 	hfi_write_cmd(client_handle, prop);
 	kfree(prop);
@@ -561,9 +561,9 @@ int hfi_set_debug_level(int client_handle, u64 icp_dbg_type, uint32_t lvl)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_DEBUG_CFG;
-	dbg_prop->prop_data[1] = lvl;
-	dbg_prop->prop_data[2] = icp_dbg_type;
+	dbg_prop->prop_data_flex[0] = HFI_PROP_SYS_DEBUG_CFG;
+	dbg_prop->prop_data_flex[1] = lvl;
+	dbg_prop->prop_data_flex[2] = icp_dbg_type;
 	hfi_write_cmd(client_handle, prop);
 
 	kfree(prop);
@@ -647,8 +647,8 @@ int hfi_send_freq_info(int client_handle, int32_t freq)
 	dbg_prop->size = size;
 	dbg_prop->pkt_type = HFI_CMD_SYS_SET_PROPERTY;
 	dbg_prop->num_prop = 1;
-	dbg_prop->prop_data[0] = HFI_PROP_SYS_ICP_HW_FREQUENCY;
-	dbg_prop->prop_data[1] = freq;
+	dbg_prop->prop_data_flex[0] = HFI_PROP_SYS_ICP_HW_FREQUENCY;
+	dbg_prop->prop_data_flex[1] = freq;
 
 	CAM_DBG(CAM_HFI,
 			 "[%s] hfi hdl: %d\n"
@@ -663,8 +663,8 @@ int hfi_send_freq_info(int client_handle, int32_t freq)
 			 dbg_prop->size,
 			 dbg_prop->pkt_type,
 			 dbg_prop->num_prop,
-			 dbg_prop->prop_data[0],
-			 dbg_prop->prop_data[1],
+			 dbg_prop->prop_data_flex[0],
+			 dbg_prop->prop_data_flex[1],
 			 hfi->dbg_lvl);
 
 	hfi_write_cmd(client_handle, prop);
