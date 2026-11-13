@@ -127,6 +127,47 @@ static inline int cam_of_get_named_gpio(struct device *dev,
 #endif
 
 #include <linux/gpio.h>
+
+#ifndef GPIOF_IN
+#define GPIOF_IN		((1 << 0))
+#endif
+#ifndef GPIOF_OUT_INIT_LOW
+#define GPIOF_OUT_INIT_LOW	((0 << 0) | (0 << 1))
+#endif
+#ifndef GPIOF_OUT_INIT_HIGH
+#define GPIOF_OUT_INIT_HIGH	((0 << 0) | (1 << 1))
+#endif
+
+static inline int __cam_gpio_request_one(unsigned int gpio,
+					 unsigned long flags, const char *label)
+{
+	int rc;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+	struct gpio_desc *desc;
+
+	desc = gpio_to_desc(gpio);
+	if (!desc)
+		return -EPROBE_DEFER;
+
+	rc = gpio_request(gpio, label);
+	if (rc)
+		return rc;
+
+	if (flags & GPIOF_IN)
+		rc = gpiod_direction_input(desc);
+	else
+		rc = gpiod_direction_output_raw(desc,
+			!!(flags & GPIOF_OUT_INIT_HIGH));
+
+	if (rc)
+		gpio_free(gpio);
+#else
+	rc = gpio_request_one(gpio, flags, label);
+#endif
+
+	return rc;
+}
+
 static inline int cam_gpio_request_one(unsigned int gpio,
 				       unsigned long flags, const char *label)
 {
@@ -137,7 +178,7 @@ static inline int cam_gpio_request_one(unsigned int gpio,
 	char *owner_label;
 #endif
 
-	rc = gpio_request_one(gpio, flags, label);
+	rc = __cam_gpio_request_one(gpio, flags, label);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
 	if (rc == -EBUSY) {
 		/*
@@ -164,7 +205,7 @@ static inline int cam_gpio_request_one(unsigned int gpio,
 				gpio);
 			kfree(owner_label);
 			gpio_free(gpio);
-			rc = gpio_request_one(gpio, flags, label);
+			rc = __cam_gpio_request_one(gpio, flags, label);
 		} else {
 			kfree(owner_label);
 		}

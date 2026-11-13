@@ -35,6 +35,16 @@ typedef struct {
 } cam_gpio;
 #endif
 
+#ifndef GPIOF_IN
+#define GPIOF_IN		((1 << 0))
+#endif
+#ifndef GPIOF_OUT_INIT_LOW
+#define GPIOF_OUT_INIT_LOW	((0 << 0) | (0 << 1))
+#endif
+#ifndef GPIOF_OUT_INIT_HIGH
+#define GPIOF_OUT_INIT_HIGH	((0 << 0) | (1 << 1))
+#endif
+
 #if IS_REACHABLE(CONFIG_MSM_MMRM)
 #include <linux/soc/qcom/msm_mmrm.h>
 #endif

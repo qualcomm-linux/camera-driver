@@ -1241,7 +1241,7 @@ static int cam_soc_util_request_gpio_table(
 	}
 	if (gpio_en) {
 		for (i = 0; i < size; i++) {
-			rc = gpio_request_one(gpio_tbl[i].gpio,
+			rc = cam_gpio_request_one(gpio_tbl[i].gpio,
 				gpio_tbl[i].flags, gpio_tbl[i].label);
 			if (rc) {
 				/*
