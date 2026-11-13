@@ -56,4 +56,16 @@ void cam_csiphy_shutdown(struct csiphy_device *csiphy_dev);
  */
 void cam_csiphy_register_baseaddress(struct csiphy_device *csiphy_dev);
 
+/**
+ * @phy_idx: CSIPHY index to update
+ * @data:    CSID-side live status snapshot to latch
+ *
+ * This API updates the qmargin CSID-side live status for a given PHY,
+ * honoring a sticky-error rule: a latched error is not overwritten by a
+ * clean update until the data is read (and cleared) via the csiphy_qmargin
+ * sysfs param.
+ */
+void cam_csiphy_update_qmargin_csid_vals(int phy_idx,
+	struct csiphy_qmargin_csid_output *data);
+
 #endif /* _CAM_CSIPHY_CORE_H_ */

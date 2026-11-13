@@ -127,6 +127,47 @@ int32_t cam_csiphy_status_dmp(struct csiphy_device *csiphy_dev)
 	return rc;
 }
 
+int32_t cam_csiphy_common_status_reg_dump(struct csiphy_device *csiphy_dev)
+{
+	struct csiphy_reg_parms_t *csiphy_reg = NULL;
+	void __iomem              *phy_base = NULL;
+	int                        reg_id = 0;
+	uint32_t                   val, status_reg, clear_reg, size;
+	uint32_t                  *buffer;
+
+	if (!csiphy_dev) {
+		CAM_ERR(CAM_CSIPHY, "invalid input");
+		return -EINVAL;
+	}
+
+	csiphy_reg = &csiphy_dev->ctrl_reg->csiphy_reg;
+	phy_base = csiphy_dev->soc_info.reg_map[0].mem_base;
+	status_reg = csiphy_reg->mipi_csiphy_interrupt_status0_addr;
+	clear_reg = csiphy_reg->mipi_csiphy_interrupt_clear0_addr;
+	buffer = csiphy_dev->qmargin_data.csiphy_qmargin_output_regs;
+	size = CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT;
+
+	if (!phy_base) {
+		CAM_ERR(CAM_CSIPHY, "phy base is NULL");
+		return -EINVAL;
+	}
+
+	for (reg_id = 0; reg_id < size; reg_id++) {
+		val = cam_io_r(phy_base + status_reg + (0x4 * reg_id));
+		if (reg_id < csiphy_reg->csiphy_interrupt_status_size)
+			cam_io_w_mb(val, phy_base + clear_reg + (0x4 * reg_id));
+		/*
+		 * Accumulate: status bits seen in any stream since the last
+		 * csiphy_qmargin read-out are kept (e.g. across an NHX re-acquire).
+		 */
+		buffer[reg_id] |= val;
+		CAM_DBG(CAM_CSIPHY, "CSIPHY%d COMMON_STATUS%d = 0x%x",
+			csiphy_dev->soc_info.index, reg_id, val);
+	}
+
+	return 0;
+}
+
 static enum cam_vote_level get_clk_vote_default(struct csiphy_device *csiphy_dev,
 	int32_t index)
 {

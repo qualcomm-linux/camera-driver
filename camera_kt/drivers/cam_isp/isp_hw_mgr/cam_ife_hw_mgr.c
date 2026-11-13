@@ -4698,6 +4698,7 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 	struct cam_isp_hw_mgr_res        *hw_mgr_res;
 	struct cam_isp_resource_node     *rsrc_node = NULL;
 	uint32_t                          i, camif_debug;
+	uint64_t                          csid_debug;
 	bool                              res_rdi_context_set = false;
 	uint32_t                          primary_rdi_src_res;
 	uint32_t                          primary_rdi_out_res;
@@ -4744,13 +4745,15 @@ static int cam_ife_mgr_start_hw(void *hw_mgr_priv, void *start_hw_args)
 	}
 
 	/* set current csid debug information to CSID HW */
+	csid_debug = g_ife_hw_mgr.debug_cfg.csid_debug;
+	if (g_ife_hw_mgr.debug_cfg.enable_cdr_sweep_debug)
+		csid_debug |= CAM_IFE_CSID_DEBUG_ENABLE_CDR_SWEEP;
 	for (i = 0; i < CAM_IFE_CSID_HW_NUM_MAX; i++) {
 		if (g_ife_hw_mgr.csid_devices[i])
 			rc = g_ife_hw_mgr.csid_devices[i]->hw_ops.process_cmd(
 				g_ife_hw_mgr.csid_devices[i]->hw_priv,
 				CAM_IFE_CSID_SET_CSID_DEBUG,
-				&g_ife_hw_mgr.debug_cfg.csid_debug,
-				sizeof(g_ife_hw_mgr.debug_cfg.csid_debug));
+				&csid_debug, sizeof(csid_debug));
 	}
 
 	camif_debug = g_ife_hw_mgr.debug_cfg.camif_debug;
@@ -8433,6 +8436,9 @@ static int cam_ife_hw_mgr_debug_register(void)
 	debugfs_create_bool("disable_ubwc_comp", 0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
 		&g_ife_hw_mgr.debug_cfg.disable_ubwc_comp);
+	debugfs_create_bool("enable_cdr_sweep_debug", 0644,
+		g_ife_hw_mgr.debug_cfg.dentry,
+		&g_ife_hw_mgr.debug_cfg.enable_cdr_sweep_debug);
 
 end:
 	g_ife_hw_mgr.debug_cfg.enable_recovery = 0;

@@ -77,4 +77,13 @@ int cam_csiphy_mem_dmp(struct cam_hw_soc_info *soc_info);
  * This API dumps memory for the entire status region
  */
 int32_t cam_csiphy_status_dmp(struct csiphy_device *csiphy_dev);
+
+/**
+ * @csiphy_dev: CSIPHY device structure
+ *
+ * Reads (and clears) the CSIPHY common status registers into
+ * qmargin_data.csiphy_qmargin_output_regs for the csiphy_qmargin read-out.
+ * Values are OR-accumulated until the read-out clears them.
+ */
+int32_t cam_csiphy_common_status_reg_dump(struct csiphy_device *csiphy_dev);
 #endif /* _CAM_CSIPHY_SOC_H_ */

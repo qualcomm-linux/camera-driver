@@ -46,10 +46,355 @@ module_param(csiphy_dump, int, 0644);
 struct g_csiphy_data {
 	void __iomem *base_address;
 	uint8_t is_3phase;
+	struct csiphy_qmargin_sweep_data *qmargin_data;
 };
 
 static struct g_csiphy_data g_phy_data[MAX_CSIPHY] = {{0, 0}};
 static int active_csiphy_hw_cnt;
+
+#define CSIPHY_ONTHEGO_BUFSIZE       90
+#define CSIPHY_ONTHEGO_BUFSIZE_READ  (CSIPHY_ONTHEGO_BUFSIZE / 6)
+#define CSIPHY_QMARGIN_STR_LEN       20
+#define CSIPHY_QMARGIN_DEFAULT_STR   "default"
+
+/* Address stride between 2-phase lane register blocks; the clock lane sits in the upper half */
+#define CSIPHY_2PH_LANE_REG_STRIDE   0x200
+
+static char csiphy_onthego_regs[20];
+static int csiphy_onthego_reg_count[MAX_CSIPHY];
+static unsigned int csiphy_onthego_regvals[MAX_CSIPHY][CSIPHY_ONTHEGO_BUFSIZE];
+static unsigned int csiphy_onthego_read_count[MAX_CSIPHY];
+static unsigned int csiphy_onthego_readregs[MAX_CSIPHY][CSIPHY_ONTHEGO_BUFSIZE_READ];
+static char csiphy_qmargin[CSIPHY_QMARGIN_STR_LEN];
+
+static void csiphy_set_onthego_write_regs(int *inp, int num_input, int phy_idx)
+{
+	int i;
+
+	if (phy_idx >= MAX_CSIPHY)
+		return;
+
+	for (i = 0; i < num_input && i < CSIPHY_ONTHEGO_BUFSIZE; i++)
+		csiphy_onthego_regvals[phy_idx][i] = (unsigned int) inp[i];
+
+	csiphy_onthego_reg_count[phy_idx] = i;
+}
+
+static void csiphy_set_onthego_read_regs(int *inp, int num_input, int phy_idx)
+{
+	int i;
+
+	if (phy_idx >= MAX_CSIPHY)
+		return;
+
+	for (i = 0; i < num_input && i < CSIPHY_ONTHEGO_BUFSIZE_READ; i++)
+		csiphy_onthego_readregs[phy_idx][i] = (unsigned int) inp[i];
+
+	csiphy_onthego_read_count[phy_idx] = i;
+}
+
+static int csiphy_set_onthego_values(const char *val, const struct kernel_param *kp)
+{
+	/**
+	 * Expected format string: ":n1:n2:..:val1,val2,..."
+	 * Values between the colons specify the PHY(s) these settings apply to.
+	 * The actual onthego values are comma-delimited entries, a multiple
+	 * of 3 (reg_addr, val, delay). "X" as the value list clears the
+	 * selected PHYs; an "R" entry makes it a list of registers to read.
+	 */
+	int i, idx, onthego_val, onthego_idx = 0;
+	int onthego_values[CSIPHY_ONTHEGO_BUFSIZE] = {0};
+	char *p1, *p2, *token;
+	bool phy_target[MAX_CSIPHY] = {false}, read = false;
+
+	p1 = strnchr(val, 1, ':'); p2 = strrchr(val, ':');
+	if (!p1 || !p2 || p2 - p1 < 2) {
+		CAM_ERR(CAM_CSIPHY, "Invalid csiphy onthego input string: %s", val);
+		return -EINVAL;
+	}
+
+	strscpy(csiphy_onthego_regs, p1, 20);
+	while ((token = strsep(&p1, ":")) != NULL) {
+		if (!kstrtoint(token, 0, &idx) && idx >= 0 && idx < MAX_CSIPHY)
+			phy_target[idx] = true;
+	}
+
+	p1 = p2 + 1;
+
+	if (!strncasecmp(p1, "X", 1)) {
+		for (i = 0; i < MAX_CSIPHY; i++) {
+			if (phy_target[i]) {
+				csiphy_onthego_reg_count[i] = 0;
+				csiphy_onthego_read_count[i] = 0;
+			}
+		}
+		return 0;
+	}
+
+	while (((token = strsep(&p1, ",")) != NULL) && onthego_idx < CSIPHY_ONTHEGO_BUFSIZE) {
+		while (token && token[0] == ' ')
+			token++;
+		if (token && !strncasecmp(token, "R", 1))
+			read = true;
+		if (!kstrtoint(token, 0, &onthego_val))
+			onthego_values[onthego_idx++] = onthego_val;
+	}
+
+	if (!onthego_idx || (!read && (onthego_idx % 3))) {
+		CAM_ERR(CAM_CSIPHY, "Invalid multiple of onthego entries: %d,", onthego_idx);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < MAX_CSIPHY && onthego_idx; i++) {
+		if (phy_target[i]) {
+			if (read)
+				csiphy_set_onthego_read_regs(onthego_values, onthego_idx, i);
+			else
+				csiphy_set_onthego_write_regs(onthego_values, onthego_idx, i);
+		}
+	}
+
+	return 0;
+}
+
+static int csiphy_get_onthego_values(char *buffer, const struct kernel_param *kp)
+{
+	int rc = 0, i, j, reg_count;
+	char *p = buffer;
+
+	for (i = 0; i < MAX_CSIPHY; i++) {
+		reg_count = csiphy_onthego_reg_count[i];
+		rc += scnprintf(p + rc, PAGE_SIZE - rc, "PHY idx %d: ", i);
+		for (j = 0; j < reg_count; j++)
+			rc += scnprintf(p + rc, PAGE_SIZE - rc, "0x%x,",
+				csiphy_onthego_regvals[i][j]);
+		rc += scnprintf(p + rc, PAGE_SIZE - rc, "\n");
+
+		if (csiphy_onthego_read_count[i] && g_phy_data[i].base_address) {
+			rc += scnprintf(p + rc, PAGE_SIZE - rc, "Reg read for PHY_%d:\n", i);
+			for (j = 0; j < csiphy_onthego_read_count[i]; j++) {
+				rc += scnprintf(p + rc, PAGE_SIZE - rc,
+					"\tOffset: 0x%x, Val: 0x%x\n",
+					csiphy_onthego_readregs[i][j], cam_io_r_mb(
+						g_phy_data[i].base_address +
+					csiphy_onthego_readregs[i][j]));
+			}
+			rc += scnprintf(p + rc, PAGE_SIZE - rc, "\n");
+		}
+	}
+	return rc;
+}
+
+static const struct kernel_param_ops csiphy_onthego_ops = {
+	.set = csiphy_set_onthego_values,
+	.get = csiphy_get_onthego_values,
+};
+
+static int csiphy_qmargin_get_defaults(char *buffer, int phy_idx)
+{
+	int i, bytes_written = 0;
+	char *p = buffer;
+	struct csiphy_qmargin_sweep_data *qmargin_data;
+
+	if (!g_phy_data[phy_idx].qmargin_data) {
+		CAM_ERR(CAM_CSIPHY, "Invalid PHY idx: %u", phy_idx);
+		return 0;
+	}
+
+	qmargin_data = g_phy_data[phy_idx].qmargin_data;
+
+	/* camera_kt carries no CPHY qmargin tagging, so only DPHY defaults are reported */
+	if (g_phy_data[phy_idx].is_3phase)
+		return 0;
+
+	bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+		"PHY%d_NUM_LANES: %d\n", phy_idx, qmargin_data->lane_cnt);
+	/* The legacy CSID has no EPD support */
+	bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+		"PHY%d_EPD_ENABLED: N\n", phy_idx);
+	bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+		"PHY%d_BW: %llu\n", phy_idx, qmargin_data->bw);
+
+	for (i = 0; i < CAM_CSIPHY_MAX_DPHY_DL_CLK_LANES; i++) {
+		if (!qmargin_data->pgm_delay[i].is_lane_enable)
+			continue;
+		bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+			"PHY%d_LN%d_PGM_DELAY_DEFAULT: addr=0x%x data=0x%x clk_ln=%d\n",
+			phy_idx, i,
+			qmargin_data->pgm_delay[i].regs.reg_addr,
+			qmargin_data->pgm_delay[i].regs.reg_data,
+			qmargin_data->pgm_delay[i].is_2ph_clk_lane);
+	}
+
+	bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written, "\n");
+
+	return bytes_written;
+}
+
+static int csiphy_qmargin_get(char *buffer, const struct kernel_param *kp)
+{
+	int bytes_written = 0, i, j;
+	char *p = buffer;
+	char num[10];
+	char lane_name[8];
+	struct csiphy_qmargin_sweep_data *qdata;
+	struct csiphy_qmargin_csid_output *qmargin_csid_output;
+
+	for (i = 0; i < MAX_CSIPHY; i++) {
+		snprintf(num, sizeof(num), "%d", i);
+
+		if (!strstr(csiphy_qmargin, num) || !g_phy_data[i].qmargin_data)
+			continue;
+
+		qdata = g_phy_data[i].qmargin_data;
+		qmargin_csid_output = &qdata->qmargin_csid_output;
+
+		if (strstr(csiphy_qmargin, CSIPHY_QMARGIN_DEFAULT_STR))
+			bytes_written += csiphy_qmargin_get_defaults(p + bytes_written, i);
+
+		bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+			"PHY%d_CSI2_RX: 0x%x\n",
+			i, qmargin_csid_output->csi2_rx_status);
+		bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+			"PHY%d_CSI2_CRC: 0x%x\n",
+			i, qmargin_csid_output->csi2_total_crc_err);
+		bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+			"PHY%d_CSI2_PKT: 0x%x\n",
+			i, qmargin_csid_output->csi2_total_pkts_rcvd);
+		for (j = 0; j < CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT; j++)
+			bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+				"PHY%d_COMMON_STATUS%u: 0x%x\n",
+				i, j, qdata->csiphy_qmargin_output_regs[j]);
+
+		if (!g_phy_data[i].is_3phase) {
+			bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+				"\nPHY%d_IS_COMBO_MODE: %u\n", i, qdata->is_combo_mode);
+			bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+				"PHY%d_NUM_LANES: %u\n", i, qdata->lane_cnt);
+
+			for (j = 0; j < CAM_CSIPHY_MAX_DPHY_DL_CLK_LANES; j++) {
+				if (!qdata->pgm_delay[j].is_lane_enable)
+					continue;
+				if (j == CAM_CSIPHY_MAX_DPHY_LANES)
+					snprintf(lane_name, sizeof(lane_name), "LNCK");
+				else
+					snprintf(lane_name, sizeof(lane_name), "LN%d", j * 2);
+				bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written,
+					"PHY%d_%s_PGM_DELAY: addr=0x%x data=0x%x clk_ln=%d\n",
+					i, lane_name,
+					qdata->pgm_delay[j].regs.reg_addr,
+					qdata->pgm_delay[j].regs.reg_data,
+					qdata->pgm_delay[j].is_2ph_clk_lane);
+			}
+		}
+
+		bytes_written += scnprintf(p + bytes_written, PAGE_SIZE - bytes_written, "\n");
+
+		/* One read-out per stream: start the next one from a clean slate */
+		memset(qdata, 0, sizeof(*qdata));
+	}
+
+	return bytes_written;
+}
+
+static int csiphy_qmargin_set(const char *val, const struct kernel_param *kp)
+{
+	strscpy(csiphy_qmargin, val, CSIPHY_QMARGIN_STR_LEN);
+
+	return 0;
+}
+
+static const struct kernel_param_ops csiphy_qmargin_ops = {
+	.set = csiphy_qmargin_set,
+	.get = csiphy_qmargin_get,
+};
+
+module_param_cb(csiphy_onthego_regs, &csiphy_onthego_ops, NULL, 0644);
+MODULE_PARM_DESC(csiphy_onthego_regs, "Functionality to let csiphy registers program on the fly");
+module_param_cb(csiphy_qmargin, &csiphy_qmargin_ops, NULL, 0644);
+MODULE_PARM_DESC(csiphy_qmargin, "Functionality to print registers related to PHY tuning");
+
+void cam_csiphy_update_qmargin_csid_vals(int phy_idx,
+	struct csiphy_qmargin_csid_output *data)
+{
+	struct csiphy_qmargin_csid_output *qmargin_csid_output;
+
+	if (phy_idx < 0 || phy_idx >= MAX_CSIPHY || !data)
+		return;
+
+	if (!g_phy_data[phy_idx].qmargin_data)
+		return;
+
+	qmargin_csid_output = &(g_phy_data[phy_idx].qmargin_data->qmargin_csid_output);
+
+	/* Sticky: a clean update never overwrites a latched error */
+	if (!data->csi2_err_seen && qmargin_csid_output->csi2_err_seen)
+		return;
+
+	*qmargin_csid_output = *data;
+}
+
+static void cam_csiphy_get_dphy_lane_idx_from_addr(uint32_t reg_addr,
+	uint8_t *lane_idx, bool *is_2ph_clk_lane)
+{
+	uint32_t remainder = reg_addr % CSIPHY_2PH_LANE_REG_STRIDE;
+
+	*lane_idx = reg_addr / CSIPHY_2PH_LANE_REG_STRIDE;
+	*is_2ph_clk_lane = (remainder >= (CSIPHY_2PH_LANE_REG_STRIDE / 2));
+	if (*is_2ph_clk_lane)
+		*lane_idx = CAM_CSIPHY_MAX_DPHY_LANES;
+}
+
+static void cam_csiphy_capture_qmargin_pgm_delay(
+	struct csiphy_device *csiphy_dev,
+	const struct csiphy_reg_t *reg, uint32_t lane_enable)
+{
+	struct csiphy_dphy_qmargin_config *cfg;
+	uint8_t lane_idx;
+	bool is_2ph_clk_lane;
+
+	/* 2-phase lane enable bits follow the lane block: BIT(reg_addr >> 8) */
+	if (!(lane_enable & BIT((reg->reg_addr >> 8) & 0x7)))
+		return;
+
+	cam_csiphy_get_dphy_lane_idx_from_addr(reg->reg_addr, &lane_idx,
+		&is_2ph_clk_lane);
+	if (lane_idx >= CAM_CSIPHY_MAX_DPHY_DL_CLK_LANES)
+		return;
+
+	cfg = &csiphy_dev->qmargin_data.pgm_delay[lane_idx];
+	cfg->regs            = *reg;
+	cfg->lane_idx        = lane_idx;
+	cfg->is_2ph_clk_lane = is_2ph_clk_lane;
+	cfg->is_lane_enable  = true;
+
+	CAM_DBG(CAM_CSIPHY, "PHY%d LN%d PGM delay default: addr=0x%x data=0x%x clk_ln=%d",
+		csiphy_dev->soc_info.index, lane_idx, cfg->regs.reg_addr,
+		cfg->regs.reg_data, is_2ph_clk_lane);
+}
+
+static inline void cam_csiphy_apply_onthego_reg_values(void __iomem *csiphybase,
+	uint8_t csiphy_idx)
+{
+	int i;
+
+	CAM_DBG(CAM_CSIPHY, "csiphy: %d, onthego_reg_count: %d",
+		csiphy_idx, csiphy_onthego_reg_count[csiphy_idx]);
+
+	for (i = 0; i + 2 < csiphy_onthego_reg_count[csiphy_idx]; i += 3) {
+		cam_io_w_mb(csiphy_onthego_regvals[csiphy_idx][i+1],
+			csiphybase + csiphy_onthego_regvals[csiphy_idx][i]);
+
+		if (csiphy_onthego_regvals[csiphy_idx][i+2])
+			usleep_range(csiphy_onthego_regvals[csiphy_idx][i+2],
+				csiphy_onthego_regvals[csiphy_idx][i+2] + 5);
+
+		CAM_INFO(CAM_CSIPHY, "Offset: 0x%x, Val: 0x%x Delay(us): %u",
+			csiphy_onthego_regvals[csiphy_idx][i],
+			cam_io_r_mb(csiphybase + csiphy_onthego_regvals[csiphy_idx][i]),
+			csiphy_onthego_regvals[csiphy_idx][i+2]);
+	}
+}
 
 static int32_t cam_csiphy_get_instance_offset(
 	struct csiphy_device *csiphy_dev,
@@ -486,6 +831,22 @@ static int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 		cam_csiphy_update_secure_info(csiphy_dev,
 			index);
 
+	csiphy_dev->qmargin_data.lane_cnt = csiphy_dev->csiphy_info[index].lane_cnt;
+	csiphy_dev->qmargin_data.bw = csiphy_dev->csiphy_info[index].data_rate;
+	csiphy_dev->qmargin_data.is_combo_mode = csiphy_dev->combo_mode;
+	/*
+	 * Append the CSIPHY index to a non-empty csiphy_qmargin selector,
+	 * e.g. "default" becomes "defaultX" where X is the CSIPHY index.
+	 */
+	{
+		size_t current_len = strlen(csiphy_qmargin);
+
+		if (current_len > 0 && current_len < sizeof(csiphy_qmargin) - 2)
+			scnprintf(csiphy_qmargin + current_len,
+				sizeof(csiphy_qmargin) - current_len,
+				"%d", csiphy_dev->soc_info.index);
+	}
+
 	CAM_DBG(CAM_CSIPHY,
 		"phy version:%d, phy_idx: %d",
 		csiphy_dev->hw_version,
@@ -906,6 +1267,15 @@ static int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev,
 					csiphybase +
 					reg_array[lane_pos][i].reg_addr);
 			break;
+			case CSIPHY_QMARGIN_PGM_DELAY:
+				cam_io_w_mb(reg_array[lane_pos][i].reg_data,
+					csiphybase +
+					reg_array[lane_pos][i].reg_addr);
+				if (!is_3phase && strstr(csiphy_qmargin,
+					CSIPHY_QMARGIN_DEFAULT_STR))
+					cam_csiphy_capture_qmargin_pgm_delay(csiphy_dev,
+						&reg_array[lane_pos][i], lane_enable);
+			break;
 			default:
 				CAM_DBG(CAM_CSIPHY, "Do Nothing");
 			break;
@@ -1242,12 +1612,31 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		}
 
 		if (!csiphy_dev->acquire_count) {
+			struct csiphy_qmargin_csid_output saved_qmargin_csid_output =
+				csiphy_dev->qmargin_data.qmargin_csid_output;
+			uint32_t saved_qmargin_output_regs[CSIPHY_QMARGIN_CMN_STATUS_REG_COUNT];
+
+			memcpy(saved_qmargin_output_regs,
+				csiphy_dev->qmargin_data.csiphy_qmargin_output_regs,
+				sizeof(saved_qmargin_output_regs));
+
 			g_phy_data[csiphy_dev->soc_info.index].is_3phase =
 					csiphy_acq_params.csiphy_3phase;
 			CAM_DBG(CAM_CSIPHY,
 					"g_csiphy data is updated for index: %d is_3phase: %u",
 					csiphy_dev->soc_info.index,
 					g_phy_data[csiphy_dev->soc_info.index].is_3phase);
+
+			/*
+			 * The CSID/common status results stay until csiphy_qmargin
+			 * is read, so an error latched before a re-acquire (e.g.
+			 * NHX re-acquiring the PHY mid-test) is not lost.
+			 */
+			memset(&csiphy_dev->qmargin_data, 0,
+				sizeof(struct csiphy_qmargin_sweep_data));
+			csiphy_dev->qmargin_data.qmargin_csid_output = saved_qmargin_csid_output;
+			memcpy(csiphy_dev->qmargin_data.csiphy_qmargin_output_regs,
+				saved_qmargin_output_regs, sizeof(saved_qmargin_output_regs));
 		}
 
 		csiphy_dev->acquire_count++;
@@ -1292,6 +1681,12 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			offset >= csiphy_dev->session_max_device_support) {
 			CAM_ERR(CAM_CSIPHY, "Index is invalid: %d", offset);
 			goto release_mutex;
+		}
+
+		if (strlen(csiphy_qmargin)) {
+			csiphy_dev->qmargin_data.lane_cnt =
+				csiphy_dev->csiphy_info[offset].lane_cnt;
+			cam_csiphy_common_status_reg_dump(csiphy_dev);
 		}
 
 		if (--csiphy_dev->start_dev_count) {
@@ -1599,6 +1994,10 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 			goto release_mutex;
 		}
 		rc = cam_csiphy_config_dev(csiphy_dev, config.dev_handle);
+		if (!rc && csiphy_onthego_reg_count[csiphy_dev->soc_info.index])
+			cam_csiphy_apply_onthego_reg_values(
+				csiphy_dev->soc_info.reg_map[0].mem_base,
+				csiphy_dev->soc_info.index);
 		if (csiphy_dump == 1)
 			cam_csiphy_mem_dmp(&csiphy_dev->soc_info);
 
@@ -1671,4 +2070,6 @@ void cam_csiphy_register_baseaddress(struct csiphy_device *csiphy_dev)
 
 	g_phy_data[csiphy_dev->soc_info.index].base_address =
 		csiphy_dev->soc_info.reg_map[0].mem_base;
+	g_phy_data[csiphy_dev->soc_info.index].qmargin_data =
+		&csiphy_dev->qmargin_data;
 }

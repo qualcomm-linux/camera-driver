@@ -35,6 +35,7 @@
  * @enable_req_dump:           Enable request dump on HW errors
  * @per_req_reg_dump:          Enable per request reg dump
  * @disable_ubwc_comp:         Disable UBWC compression
+ * @enable_cdr_sweep_debug:    Relay CSID CSI2 RX status to CSIPHY for CDR sweep
  *
  */
 struct cam_ife_hw_mgr_debug {
@@ -46,6 +47,7 @@ struct cam_ife_hw_mgr_debug {
 	bool           enable_req_dump;
 	bool           per_req_reg_dump;
 	bool           disable_ubwc_comp;
+	bool           enable_cdr_sweep_debug;
 };
 
 /**

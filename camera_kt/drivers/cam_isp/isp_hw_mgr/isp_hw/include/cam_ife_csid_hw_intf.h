@@ -14,6 +14,13 @@
 #define CAM_IFE_CSID_RDI_MAX                           4
 #define CAM_IFE_CSID_UDI_MAX                           3
 
+/*
+ * csid_debug bit set by the IFE hw manager (not the ife_csid_debug
+ * debugfs value) when enable_cdr_sweep_debug is on: the CSID relays its
+ * CSI2 RX status and counters to CSIPHY for the csiphy_qmargin read-out.
+ */
+#define CAM_IFE_CSID_DEBUG_ENABLE_CDR_SWEEP            BIT(10)
+
 /**
  * enum cam_ife_pix_path_res_id - Specify the csid patch
  */

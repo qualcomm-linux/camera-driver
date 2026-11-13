@@ -72,6 +72,7 @@
 #define CSID_DEBUG_ENABLE_HBI_VBI_INFO            BIT(7)
 #define CSID_DEBUG_DISABLE_EARLY_EOF              BIT(8)
 #define CSID_DEBUG_ENABLE_UNMAPPED_VC_DT_IRQ      BIT(9)
+#define CSID_DEBUG_ENABLE_CDR_SWEEP               CAM_IFE_CSID_DEBUG_ENABLE_CDR_SWEEP
 
 #define CAM_CSID_EVT_PAYLOAD_MAX                  10
 #define CAM_CSID_MIN_HBI_CFG_MAX_VAL              0xF
